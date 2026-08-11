@@ -780,6 +780,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/proposals/{proposal_id}/invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Invitation
+         * @description 我被邀请进了这一队，这次我会得到什么。
+         *
+         *     只有名单上的人看得到。不在名单上返回 404 而不是 403——
+         *     403 等于确认了这个提案存在。
+         */
+        get: operations["invitation_api_proposals__proposal_id__invitation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/{event_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Evidence
+         * @description 留下一件东西：返图、一段记录、做出来的成果。
+         *
+         *     **只存事实不存评价。** 这里没有任何字段能放"谁表现好"，表里也没有——
+         *     不是暂时没实现，是它不该存在。一旦开始存，它就变成打分系统，
+         *     而打分系统会让人不敢参加自己不擅长的事。
+         */
+        post: operations["add_evidence_api_events__event_id__evidence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/{event_id}/echo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Echo
+         * @description 这件事结束之后的那一屏。
+         *
+         *     抽不出草稿**不是错误**：这次没证据就没什么可抽的，起草服务挂了就闭嘴。
+         *     两种情况下这一屏都照常——用户仍然能看证据、能自己写一条。
+         */
+        get: operations["echo_api_events__event_id__echo_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/{event_id}/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write Own
+         * @description 自己写一条。
+         *
+         *     它同样落成草稿，同样要再点一次确认。看起来多此一举——本人写的东西
+         *     为什么还要本人再点？因为**只留一条通往「算数」的路**：两条路意味着
+         *     "哪些记录算数"这个问题有两个答案。
+         */
+        post: operations["write_own_api_events__event_id__records_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Invitations
+         * @description 我被邀请进了哪几队。
+         *
+         *     界面靠它把「这次你会得到什么」那一屏找出来——否则被邀请的人
+         *     根本不知道有人在等他答复。
+         */
+        get: operations["my_invitations_api_me_proposals_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -967,6 +1084,32 @@ export interface components {
             /** Condition */
             condition?: string | null;
         };
+        /** DraftOut */
+        DraftOut: {
+            /**
+             * Facet Id
+             * Format: uuid
+             */
+            facet_id: string;
+            /** Text */
+            text: string;
+            /** Grounded In */
+            grounded_in: string[];
+            /** Hint */
+            hint: string;
+            /** Drafted By Agent */
+            drafted_by_agent: boolean;
+        };
+        /** EchoOut */
+        EchoOut: {
+            /** Event Title */
+            event_title: string;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceOut"][];
+            recap?: components["schemas"]["RecapOut"] | null;
+            /** To Confirm */
+            to_confirm?: components["schemas"]["DraftOut"][];
+        };
         /** EnvelopeOut */
         EnvelopeOut: {
             /**
@@ -992,6 +1135,41 @@ export interface components {
             expires_at: string;
             /** Consent Record Id */
             consent_record_id?: string | null;
+        };
+        /** EvidenceIn */
+        EvidenceIn: {
+            /**
+             * Kind
+             * @default note
+             */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /** Uri */
+            uri?: string | null;
+        };
+        /** EvidenceOut */
+        EvidenceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string | null;
+            /** Uri */
+            uri: string | null;
+            /**
+             * Uploaded By
+             * Format: uuid
+             */
+            uploaded_by: string;
         };
         /** FollowUpOut */
         FollowUpOut: {
@@ -1187,6 +1365,36 @@ export interface components {
             is_matchable: boolean;
             /** Action Kind */
             action_kind?: string | null;
+        };
+        /**
+         * InvitationOut
+         * @description 被邀请的一侧看到的那一屏。
+         *
+         *     **不是"你被选中了"。** 单向推荐会让接收方觉得自己是被挑的商品，
+         *     而互惠推荐的成功必须以多方接受为条件——单边相关度会系统性高估
+         *     真实匹配。
+         *
+         *     `gets` 为空这一屏就不该存在：说不出对方能得到什么的邀请，
+         *     不该被发出去。
+         */
+        InvitationOut: {
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** About */
+            about: string;
+            /** With Others */
+            with_others: string[];
+            /** I Get */
+            i_get: string[];
+            /** I Give */
+            i_give: string[];
+            /** Time Cost */
+            time_cost?: string | null;
+            /** Answer By */
+            answer_by: string;
         };
         /**
          * ItemKindOut
@@ -1462,6 +1670,19 @@ export interface components {
          * @enum {string}
          */
         Reach: "ours" | "outside";
+        /**
+         * RecapOut
+         * @description 这次一起做成了什么。
+         *
+         *     **不入库。** 它是证据的一次转写，删掉重算还是它；存下来只会多一份
+         *     可能和证据不一致的副本。要留下来的东西是那条记录，而那个要本人点头。
+         */
+        RecapOut: {
+            /** Text */
+            text: string;
+            /** Grounded In */
+            grounded_in: string[];
+        };
         /**
          * RecordSourceOut
          * @description 一条记录指回去的那件东西。
@@ -1741,6 +1962,11 @@ export interface components {
              * @default true
              */
             can_still_revise: boolean;
+        };
+        /** WriteOwnIn */
+        WriteOwnIn: {
+            /** Text */
+            text: string;
         };
     };
     responses: never;
@@ -2973,6 +3199,182 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VisibilityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invitation_api_proposals__proposal_id__invitation_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_evidence_api_events__event_id__evidence_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    echo_api_events__event_id__echo_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EchoOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_own_api_events__event_id__records_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WriteOwnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_invitations_api_me_proposals_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */

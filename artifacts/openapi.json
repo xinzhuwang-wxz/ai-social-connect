@@ -2540,6 +2540,401 @@
         }
       }
     },
+    "/api/proposals/{proposal_id}/invitation": {
+      "get": {
+        "tags": [
+          "echo"
+        ],
+        "summary": "Invitation",
+        "description": "我被邀请进了这一队，这次我会得到什么。\n\n只有名单上的人看得到。不在名单上返回 404 而不是 403——\n403 等于确认了这个提案存在。",
+        "operationId": "invitation_api_proposals__proposal_id__invitation_get",
+        "parameters": [
+          {
+            "name": "proposal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Proposal Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}/evidence": {
+      "post": {
+        "tags": [
+          "echo"
+        ],
+        "summary": "Add Evidence",
+        "description": "留下一件东西：返图、一段记录、做出来的成果。\n\n**只存事实不存评价。** 这里没有任何字段能放\"谁表现好\"，表里也没有——\n不是暂时没实现，是它不该存在。一旦开始存，它就变成打分系统，\n而打分系统会让人不敢参加自己不擅长的事。",
+        "operationId": "add_evidence_api_events__event_id__evidence_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvidenceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}/echo": {
+      "get": {
+        "tags": [
+          "echo"
+        ],
+        "summary": "Echo",
+        "description": "这件事结束之后的那一屏。\n\n抽不出草稿**不是错误**：这次没证据就没什么可抽的，起草服务挂了就闭嘴。\n两种情况下这一屏都照常——用户仍然能看证据、能自己写一条。",
+        "operationId": "echo_api_events__event_id__echo_get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EchoOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}/records": {
+      "post": {
+        "tags": [
+          "echo"
+        ],
+        "summary": "Write Own",
+        "description": "自己写一条。\n\n它同样落成草稿，同样要再点一次确认。看起来多此一举——本人写的东西\n为什么还要本人再点？因为**只留一条通往「算数」的路**：两条路意味着\n\"哪些记录算数\"这个问题有两个答案。",
+        "operationId": "write_own_api_events__event_id__records_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteOwnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/proposals": {
+      "get": {
+        "tags": [
+          "echo"
+        ],
+        "summary": "My Invitations",
+        "description": "我被邀请进了哪几队。\n\n界面靠它把「这次你会得到什么」那一屏找出来——否则被邀请的人\n根本不知道有人在等他答复。",
+        "operationId": "my_invitations_api_me_proposals_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "title": "Response My Invitations Api Me Proposals Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -2970,6 +3365,81 @@
         ],
         "title": "DecideRequest"
       },
+      "DraftOut": {
+        "properties": {
+          "facet_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Facet Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "grounded_in": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grounded In"
+          },
+          "hint": {
+            "type": "string",
+            "title": "Hint"
+          },
+          "drafted_by_agent": {
+            "type": "boolean",
+            "title": "Drafted By Agent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facet_id",
+          "text",
+          "grounded_in",
+          "hint",
+          "drafted_by_agent"
+        ],
+        "title": "DraftOut"
+      },
+      "EchoOut": {
+        "properties": {
+          "event_title": {
+            "type": "string",
+            "title": "Event Title"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceOut"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "recap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecapOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to_confirm": {
+            "items": {
+              "$ref": "#/components/schemas/DraftOut"
+            },
+            "type": "array",
+            "title": "To Confirm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_title",
+          "evidence"
+        ],
+        "title": "EchoOut"
+      },
       "EnvelopeOut": {
         "properties": {
           "id": {
@@ -3029,6 +3499,102 @@
           "expires_at"
         ],
         "title": "EnvelopeOut"
+      },
+      "EvidenceIn": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "note"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "EvidenceIn"
+      },
+      "EvidenceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uri"
+          },
+          "uploaded_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Uploaded By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "uri",
+          "uploaded_by"
+        ],
+        "title": "EvidenceOut"
       },
       "FollowUpOut": {
         "properties": {
@@ -3497,6 +4063,66 @@
           "is_matchable"
         ],
         "title": "IntentOut"
+      },
+      "InvitationOut": {
+        "properties": {
+          "proposal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Proposal Id"
+          },
+          "about": {
+            "type": "string",
+            "title": "About"
+          },
+          "with_others": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "With Others"
+          },
+          "i_get": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "I Get"
+          },
+          "i_give": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "I Give"
+          },
+          "time_cost": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Cost"
+          },
+          "answer_by": {
+            "type": "string",
+            "title": "Answer By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proposal_id",
+          "about",
+          "with_others",
+          "i_get",
+          "i_give",
+          "answer_by"
+        ],
+        "title": "InvitationOut",
+        "description": "被邀请的一侧看到的那一屏。\n\n**不是\"你被选中了\"。** 单向推荐会让接收方觉得自己是被挑的商品，\n而互惠推荐的成功必须以多方接受为条件——单边相关度会系统性高估\n真实匹配。\n\n`gets` 为空这一屏就不该存在：说不出对方能得到什么的邀请，\n不该被发出去。"
       },
       "ItemKindOut": {
         "properties": {
@@ -4121,6 +4747,28 @@
         "title": "Reach",
         "description": "一样东西谁能看见。\n\n只有两档，且默认是窄的那一档。档位多了就没人认真选，\n而\"发出去\"这件事不该有一个随手滑过去的中间态。"
       },
+      "RecapOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "grounded_in": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grounded In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "grounded_in"
+        ],
+        "title": "RecapOut",
+        "description": "这次一起做成了什么。\n\n**不入库。** 它是证据的一次转写，删掉重算还是它；存下来只会多一份\n可能和证据不一致的副本。要留下来的东西是那条记录，而那个要本人点头。"
+      },
       "RecordSourceOut": {
         "properties": {
           "evidence_id": {
@@ -4709,6 +5357,21 @@
         ],
         "title": "WaitingOut",
         "description": "「等配队」那一屏。\n\n光说\"请稍候\"用户只会走掉；说\"现在 12 个人缺剪辑，只有 3 个人会\"，\n他就知道该改需求、该去拉人、还是该自己顶上。"
+      },
+      "WriteOwnIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "WriteOwnIn"
       }
     }
   }

@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from cofield.adapters.clock import SimulatedClock
 from cofield.config import settings
 from cofield.http import (
+    echo,
     envelopes,
     intents,
     memory,
@@ -47,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(proposals.router, prefix="/api")
     app.include_router(spaces.router, prefix="/api")
     app.include_router(memory.router, prefix="/api")
+    app.include_router(echo.router, prefix="/api")
 
     @app.get("/api/health", tags=["ops"])
     def health() -> dict[str, str]:
