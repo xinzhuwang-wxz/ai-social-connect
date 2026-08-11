@@ -116,6 +116,43 @@ opportunity_seats = sa.Table(
     sa.Column("filled", sa.Integer, nullable=False, server_default="0"),
 )
 
+match_envelopes = sa.Table(
+    "match_envelopes",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("principal_id", sa.Uuid, nullable=False),
+    sa.Column("intent_id", sa.Uuid, nullable=False),
+    # 逐项授权：字段 → {audience, purposes}。白名单在领域层强制。
+    sa.Column("grants", sa.JSON, nullable=False),
+    sa.Column("cited_facet_ids", sa.ARRAY(sa.Uuid), nullable=False, server_default="{}"),
+    sa.Column("state", sa.Text, nullable=False, server_default="active"),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_envelopes_intent", "campus_id", "intent_id"),
+    sa.Index("ix_envelopes_principal", "campus_id", "principal_id"),
+)
+
+consent_records = sa.Table(
+    "consent_records",
+    metadata,
+    # 结构对齐 ISO/IEC TS 27560:2023。**只追加不修改**——撤销是追加一条
+    # withdrawn 事件，不是改写原记录。申诉与导出看的是这张表。
+    sa.Column("record_id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("pii_principal_id", sa.Uuid, nullable=False),
+    sa.Column("pii_controller", sa.Text, nullable=False),
+    sa.Column("schema_version", sa.Text, nullable=False),
+    sa.Column("notice_reference", sa.Text, nullable=False),
+    sa.Column("purposes", sa.ARRAY(sa.Text), nullable=False),
+    sa.Column("pii_categories", sa.ARRAY(sa.Text), nullable=False),
+    sa.Column("audience", sa.Text, nullable=False),
+    sa.Column("retention_until", sa.TIMESTAMP(timezone=True)),
+    sa.Column("events", sa.JSON, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_consent_principal", "campus_id", "pii_principal_id"),
+)
+
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
 RLS_TABLES: tuple[str, ...] = (
     "principals",
@@ -123,4 +160,6 @@ RLS_TABLES: tuple[str, ...] = (
     "organizations",
     "action_opportunities",
     "opportunity_seats",
+    "match_envelopes",
+    "consent_records",
 )

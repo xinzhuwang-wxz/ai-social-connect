@@ -135,7 +135,9 @@ def test_gaps_are_reported_per_role(client: TestClient, engine: Engine) -> None:
     assert gaps == {"拍摄": 2, "剪辑": 1}
 
 
-def test_the_publisher_becomes_the_steward(client: TestClient, engine: Engine, steward: Principal) -> None:
+def test_the_publisher_becomes_the_steward(
+    client: TestClient, engine: Engine, steward: Principal
+) -> None:
     """没有负责人的成局会导致责任分散，所以发布者即负责人。"""
     org = _org(engine, verified=True)
     client.post("/api/opportunities", json=_payload(org))

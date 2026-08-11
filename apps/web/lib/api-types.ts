@@ -194,6 +194,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/intents/{intent_id}/grantable-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Grantable Fields
+         * @description 这次可以逐项授权的字段。
+         *
+         *     空字段也列出来但标 `present=false`——界面据此把它们灰掉，
+         *     而不是让用户对着一个没内容的开关犹豫。
+         */
+        get: operations["grantable_fields_api_intents__intent_id__grantable_fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/intents/{intent_id}/envelope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Envelope
+         * @description 保存这次的授权，并留下一条同意记录。
+         *
+         *     信封会被撤销和过期；同意记录只追加不修改——申诉和导出看的是后者。
+         */
+        put: operations["put_envelope_api_intents__intent_id__envelope_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/envelopes/{envelope_id}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Envelope
+         * @description 收回授权。撤销后新请求立刻被拒，不用等任何异步清理。
+         */
+        post: operations["revoke_envelope_api_envelopes__envelope_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Grants
+         * @description 「谁能看到我」。仍在生效的授权，可一键收回。
+         */
+        get: operations["my_grants_api_me_grants_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/intents/{intent_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview
+         * @description 别人在小队说明里会看到我的什么。
+         *
+         *     投影按信封求出的可见字段集合做——和真正对外输出走的是同一条路径，
+         *     所以这一屏显示什么，对方就真的只看到什么。
+         */
+        get: operations["preview_api_intents__intent_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -306,6 +414,32 @@ export interface components {
              */
             qualifications: string[];
         };
+        /** EnvelopeOut */
+        EnvelopeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Intent Id
+             * Format: uuid
+             */
+            intent_id: string;
+            /** Grants */
+            grants: components["schemas"]["GrantOut"][];
+            /** Cited Facet Ids */
+            cited_facet_ids: string[];
+            /** State */
+            state: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Consent Record Id */
+            consent_record_id?: string | null;
+        };
         /** FollowUpOut */
         FollowUpOut: {
             /** Text */
@@ -317,6 +451,36 @@ export interface components {
              * @default []
              */
             options: string[];
+        };
+        /** GrantIn */
+        GrantIn: {
+            /** Field Name */
+            field_name: string;
+            /**
+             * Audience
+             * @default solver_only
+             */
+            audience: string;
+        };
+        /** GrantOut */
+        GrantOut: {
+            /** Field Name */
+            field_name: string;
+            /** Audience */
+            audience: string;
+            /** Purposes */
+            purposes: string[];
+            /** Purpose Label */
+            purpose_label: string;
+        };
+        /** GrantableFieldOut */
+        GrantableFieldOut: {
+            /** Field Name */
+            field_name: string;
+            /** Label */
+            label: string;
+            /** Present */
+            present: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -453,6 +617,27 @@ export interface components {
             qualifications: string[];
             /** State */
             state: string;
+        };
+        /**
+         * PreviewOut
+         * @description 「别人眼中的我」。
+         *
+         *     这一屏让"最小披露"从一句承诺变成用户可以自己检查的东西。
+         */
+        PreviewOut: {
+            /** Visible */
+            visible: {
+                [key: string]: unknown;
+            };
+            /** Withheld */
+            withheld: string[];
+        };
+        /** PutEnvelopeRequest */
+        PutEnvelopeRequest: {
+            /** Grants */
+            grants?: components["schemas"]["GrantIn"][];
+            /** Cited Facet Ids */
+            cited_facet_ids?: string[];
         };
         /** ReviseIntentRequest */
         ReviseIntentRequest: {
@@ -876,6 +1061,176 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpportunityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grantable_fields_api_intents__intent_id__grantable_fields_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantableFieldOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_envelope_api_intents__intent_id__envelope_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PutEnvelopeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_envelope_api_envelopes__envelope_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                envelope_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_grants_api_me_grants_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvelopeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_api_intents__intent_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PreviewOut"];
                 };
             };
             /** @description Validation Error */

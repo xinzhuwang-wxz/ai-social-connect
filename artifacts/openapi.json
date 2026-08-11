@@ -658,6 +658,362 @@
         }
       }
     },
+    "/api/intents/{intent_id}/grantable-fields": {
+      "get": {
+        "tags": [
+          "envelopes"
+        ],
+        "summary": "Grantable Fields",
+        "description": "这次可以逐项授权的字段。\n\n空字段也列出来但标 `present=false`——界面据此把它们灰掉，\n而不是让用户对着一个没内容的开关犹豫。",
+        "operationId": "grantable_fields_api_intents__intent_id__grantable_fields_get",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GrantableFieldOut"
+                  },
+                  "title": "Response Grantable Fields Api Intents  Intent Id  Grantable Fields Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}/envelope": {
+      "put": {
+        "tags": [
+          "envelopes"
+        ],
+        "summary": "Put Envelope",
+        "description": "保存这次的授权，并留下一条同意记录。\n\n信封会被撤销和过期；同意记录只追加不修改——申诉和导出看的是后者。",
+        "operationId": "put_envelope_api_intents__intent_id__envelope_put",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutEnvelopeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/envelopes/{envelope_id}:revoke": {
+      "post": {
+        "tags": [
+          "envelopes"
+        ],
+        "summary": "Revoke Envelope",
+        "description": "收回授权。撤销后新请求立刻被拒，不用等任何异步清理。",
+        "operationId": "revoke_envelope_api_envelopes__envelope_id__revoke_post",
+        "parameters": [
+          {
+            "name": "envelope_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Envelope Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvelopeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/grants": {
+      "get": {
+        "tags": [
+          "envelopes"
+        ],
+        "summary": "My Grants",
+        "description": "「谁能看到我」。仍在生效的授权，可一键收回。",
+        "operationId": "my_grants_api_me_grants_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EnvelopeOut"
+                  },
+                  "title": "Response My Grants Api Me Grants Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}/preview": {
+      "get": {
+        "tags": [
+          "envelopes"
+        ],
+        "summary": "Preview",
+        "description": "别人在小队说明里会看到我的什么。\n\n投影按信封求出的可见字段集合做——和真正对外输出走的是同一条路径，\n所以这一屏显示什么，对方就真的只看到什么。",
+        "operationId": "preview_api_intents__intent_id__preview_get",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -892,6 +1248,66 @@
         ],
         "title": "CreateOpportunityRequest"
       },
+      "EnvelopeOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/GrantOut"
+            },
+            "type": "array",
+            "title": "Grants"
+          },
+          "cited_facet_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cited Facet Ids"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "consent_record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consent Record Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "intent_id",
+          "grants",
+          "cited_facet_ids",
+          "state",
+          "expires_at"
+        ],
+        "title": "EnvelopeOut"
+      },
       "FollowUpOut": {
         "properties": {
           "text": {
@@ -917,6 +1333,78 @@
           "narrows"
         ],
         "title": "FollowUpOut"
+      },
+      "GrantIn": {
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "title": "Field Name"
+          },
+          "audience": {
+            "type": "string",
+            "title": "Audience",
+            "default": "solver_only"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_name"
+        ],
+        "title": "GrantIn"
+      },
+      "GrantOut": {
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "title": "Field Name"
+          },
+          "audience": {
+            "type": "string",
+            "title": "Audience"
+          },
+          "purposes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Purposes"
+          },
+          "purpose_label": {
+            "type": "string",
+            "title": "Purpose Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_name",
+          "audience",
+          "purposes",
+          "purpose_label"
+        ],
+        "title": "GrantOut"
+      },
+      "GrantableFieldOut": {
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "title": "Field Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_name",
+          "label",
+          "present"
+        ],
+        "title": "GrantableFieldOut"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1239,6 +1727,50 @@
           "state"
         ],
         "title": "OpportunityOut"
+      },
+      "PreviewOut": {
+        "properties": {
+          "visible": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Visible"
+          },
+          "withheld": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Withheld"
+          }
+        },
+        "type": "object",
+        "required": [
+          "visible",
+          "withheld"
+        ],
+        "title": "PreviewOut",
+        "description": "「别人眼中的我」。\n\n这一屏让\"最小披露\"从一句承诺变成用户可以自己检查的东西。"
+      },
+      "PutEnvelopeRequest": {
+        "properties": {
+          "grants": {
+            "items": {
+              "$ref": "#/components/schemas/GrantIn"
+            },
+            "type": "array",
+            "title": "Grants"
+          },
+          "cited_facet_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Cited Facet Ids"
+          }
+        },
+        "type": "object",
+        "title": "PutEnvelopeRequest"
       },
       "ReviseIntentRequest": {
         "properties": {

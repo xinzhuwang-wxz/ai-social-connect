@@ -78,7 +78,7 @@ def _clean_tables(request: pytest.FixtureRequest) -> Generator[None, None, None]
     with owner_connection(eng) as conn:
         conn.execute(
             sa.text(
-                "TRUNCATE opportunity_seats, action_opportunities, "
-                "organizations, intent_signals, principals"
+                "TRUNCATE consent_records, match_envelopes, opportunity_seats, "
+                "action_opportunities, organizations, intent_signals, principals"
             )
         )
