@@ -150,6 +150,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/opportunities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Opportunities
+         * @description 还能报名的招募。已满和已过期的不出现——列表上每一条都该能点。
+         */
+        get: operations["list_opportunities_api_opportunities_get"];
+        put?: never;
+        /**
+         * Create Opportunity
+         * @description 发布招募。发布者即负责人——没有负责人的成局会导致责任分散。
+         */
+        post: operations["create_opportunity_api_opportunities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/organizations/{organization_id}/opportunities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List For Organization
+         * @description 组织者侧：含已满与已关闭的，他们要看全貌才知道要不要补推。
+         */
+        get: operations["list_for_organization_api_organizations__organization_id__opportunities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -233,6 +277,34 @@ export interface components {
              * @default false
              */
             stash: boolean;
+        };
+        /** CreateOpportunityRequest */
+        CreateOpportunityRequest: {
+            /**
+             * Organization Id
+             * Format: uuid
+             */
+            organization_id: string;
+            /** Kind Key */
+            kind_key: string;
+            /** Title */
+            title: string;
+            /** Goal */
+            goal: string;
+            /** Seats */
+            seats: components["schemas"]["SeatIn"][];
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Location Scope */
+            location_scope?: string | null;
+            /**
+             * Qualifications
+             * @default []
+             */
+            qualifications: string[];
         };
         /** FollowUpOut */
         FollowUpOut: {
@@ -344,9 +416,65 @@ export interface components {
             /** Is Matchable */
             is_matchable: boolean;
         };
+        /** OpportunityOut */
+        OpportunityOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Organization Id
+             * Format: uuid
+             */
+            organization_id: string;
+            /** Organization Name */
+            organization_name: string;
+            /** Organization Verified */
+            organization_verified: boolean;
+            /** Kind Key */
+            kind_key: string;
+            /** Title */
+            title: string;
+            /** Goal */
+            goal: string;
+            /** Seats */
+            seats: components["schemas"]["SeatOut"][];
+            /** Total Gap */
+            total_gap: number;
+            /**
+             * Deadline
+             * Format: date-time
+             */
+            deadline: string;
+            /** Location Scope */
+            location_scope: string | null;
+            /** Qualifications */
+            qualifications: string[];
+            /** State */
+            state: string;
+        };
         /** ReviseIntentRequest */
         ReviseIntentRequest: {
             content: components["schemas"]["IntentContentIn"];
+        };
+        /** SeatIn */
+        SeatIn: {
+            /** Role */
+            role: string;
+            /** Capacity */
+            capacity: number;
+        };
+        /** SeatOut */
+        SeatOut: {
+            /** Role */
+            role: string;
+            /** Capacity */
+            capacity: number;
+            /** Filled */
+            filled: number;
+            /** Gap */
+            gap: number;
         };
         /** StarterOut */
         StarterOut: {
@@ -648,6 +776,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntentOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_opportunities_api_opportunities_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_opportunity_api_opportunities_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOpportunityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_for_organization_api_organizations__organization_id__opportunities_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path: {
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpportunityOut"][];
                 };
             };
             /** @description Validation Error */

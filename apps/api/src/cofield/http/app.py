@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from cofield.http import intents
+from cofield.http import intents, opportunities
 
 
 def create_app() -> FastAPI:
@@ -29,6 +29,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(intents.router, prefix="/api")
+    app.include_router(opportunities.router, prefix="/api")
 
     @app.get("/api/health", tags=["ops"])
     def health() -> dict[str, str]:
