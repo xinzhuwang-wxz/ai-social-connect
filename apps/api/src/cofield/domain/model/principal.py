@@ -36,3 +36,7 @@ class Principal:
     campus_id: CampusId
     display_name: str
     is_synthetic: bool = False
+    #: 自己写的一段话。它**故意不被结构化**——"想找个写朋克风格文案的"
+    #: 这类需求没有字段接得住，只有原话接得住。
+    #: 它是可授权字段，不是默认公开（见 consent.GRANTABLE_FIELDS）。
+    self_intro: str | None = None

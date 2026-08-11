@@ -23,6 +23,7 @@ from cofield.domain.model.consent import (
     Purpose,
 )
 from cofield.domain.model.intent import IntentContent
+from cofield.domain.model.principal import Principal
 from cofield.http.deps import ClockDep, PrincipalDep, ReposDep
 
 router = APIRouter(tags=["envelopes"])
@@ -92,7 +93,15 @@ _FIELD_LABELS = {
     "boundaries": "我的底线",
     "open_questions": "还没定的事",
     "portfolio_link": "作品链接",
+    "self_intro": "我写的那段介绍",
 }
+
+#: 属于**人**而不是**这条需求**的可授权字段。
+#:
+#: 白名单里混了两种作用域：多数字段是这次说的话（换一条需求就换一套），
+#: 自我介绍是一贯的（换多少条需求都是同一段）。混在一起看不出来，
+#: 结果就是取值时去内容里找一个根本不在那儿的字段，界面上显示成英文字段名。
+PRINCIPAL_SCOPED: frozenset[str] = frozenset({"self_intro"})
 
 
 def _content_field(content: IntentContent, name: str) -> object:
@@ -119,6 +128,17 @@ def _content_field(content: IntentContent, name: str) -> object:
         "portfolio_link": None,
     }
     return mapping.get(name)
+
+
+def _present(content: IntentContent, author: Principal | None, name: str) -> bool:
+    """这一项这次有没有内容可给。
+
+    没写的项不该给一个勾不动的空开关——界面据此把它收成一句小字，
+    而不是摆一排灰控件让人对着犹豫。
+    """
+    if name in PRINCIPAL_SCOPED:
+        return bool(author is not None and author.self_intro)
+    return _content_field(content, name) not in (None, [], "")
 
 
 def _out(envelope: MatchEnvelope, consent_id: UUID | None = None) -> EnvelopeOut:
@@ -153,11 +173,12 @@ def grantable_fields(
     signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
+    author = repos.principals.get(signal.principal_id)
     return [
         GrantableFieldOut(
             field_name=name,
             label=_FIELD_LABELS.get(name, name),
-            present=_content_field(signal.content, name) not in (None, [], ""),
+            present=_present(signal.content, author, name),
         )
         for name in sorted(GRANTABLE_FIELDS)
     ]
