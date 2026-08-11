@@ -26,17 +26,23 @@
 
 ## 循环
 
+设定 `/goal` 之后自主运行，逐 issue 实现并提交，不停下来问下一步做什么。
+
 ```
-/implement <milestone 的 issue>
+实现 milestone 的 issue（逐个提交）
         ↓
-/improve-codebase-architecture      每个里程碑结束后，必做
+架构审视      用 codebase-design 词汇找 deepening 机会
         ↓
-/verify                             确认在轨且不冗余
+/verify       确认在轨且不冗余
+        ↓
+提交推送      提交信息说明这个里程碑改变了什么判断
         ↓
 下一个里程碑
 ```
 
-三个命令都需要你手动敲（`implement` 与 `improve-codebase-architecture` 标了 `disable-model-invocation`）。本页是它们共用的上下文。
+**只在一种情况下停下来找人**：某个决定如果做错会导致整个里程碑返工。其余决定自己定，写进 `docs/adr/`。
+
+HANDOFF「待你决定」的 6 项属于自己定的范畴，不是阻塞项。
 
 ---
 
@@ -145,6 +151,11 @@ Guard:
 
 ## 起手
 
-```
-/implement M0：issue #1。先读 HANDOFF.md 与 docs/GOAL.md。
-```
+设定 `/goal`（内容见本页「终局」与「未达成即未完成」两节），然后从 M0 · issue #1 开始，自主推进到 M4，最后跑终局验收。
+
+## 未达成即未完成
+
+- [ ] 七步终局链路在合成校园（2 万人口 / 200–600 活跃需求）上跑通
+- [ ] 13 条领域不变量测试全绿
+- [ ] 8 个 persona 的 UI-only autoresearch 总摩擦分为 0
+- [ ] `pnpm test && pnpm typecheck` 全绿
