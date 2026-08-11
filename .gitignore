@@ -1,0 +1,6 @@
+.omx/
+.DS_Store
+node_modules/
+.next/
+.env*
+!.env.example
