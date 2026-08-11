@@ -18,3 +18,10 @@ uv run python ../../scripts/check_domain_purity.py   # 领域纯度
   两条都由 `scripts/check_domain_purity.py` 静态强制。
 - 业务查询一律经 `campus_connection`，它切到 `cofield_app` 角色并绑定租户。
   `owner_connection` 绕过行级安全，只给迁移、种子和测试清理用。
+
+## 跑起来
+
+```bash
+uv run uvicorn cofield.http.app:app --reload --port 8000
+# 契约：http://localhost:8000/openapi.json  ·  文档：/docs
+```
