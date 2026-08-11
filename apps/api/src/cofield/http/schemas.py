@@ -143,6 +143,9 @@ class IntentOut(BaseModel):
     created_at: datetime
     expires_at: datetime | None = None
     is_matchable: bool
+    #: 它属于哪张场景卡。撮合窗口长度由它决定，界面上要据此说
+    #: "明早 8 点开始配队"。
+    action_kind: str | None = None
 
     @classmethod
     def of(cls, signal: IntentSignal) -> IntentOut:
@@ -155,12 +158,16 @@ class IntentOut(BaseModel):
             created_at=signal.created_at,
             expires_at=signal.expires_at,
             is_matchable=signal.is_matchable,
+            action_kind=signal.action_kind,
         )
 
 
 class CreateIntentRequest(BaseModel):
     expression: Annotated[str, Field(min_length=1, max_length=2000)]
     content: IntentContentIn
+    #: 挑了哪张场景卡。**可以不挑**——首屏有卡但也能直接写一句话，
+    #: 不挑的那一拨按默认窗口清算，不能因为"没归类"就永远不撮合。
+    action_kind: str | None = None
     #: 还没想清楚就先存着。念头只对本人可见，不参与撮合，也不进任何公共列表。
     stash: bool = False
 

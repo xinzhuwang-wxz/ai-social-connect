@@ -419,6 +419,68 @@ negotiation_messages = sa.Table(
     sa.Index("ix_messages_task", "campus_id", "task_id", "created_at"),
 )
 
+
+# --- 行动回声与记忆（#12 #14）---
+
+#: 一次共同行动留下的证据：返图、记录、做出来的东西。
+#:
+#: 它是**事实**，不是评价。谁上传的、什么时候、指向哪个事件——就这些。
+#: 一旦开始存"这次谁表现好"，这张表就变成了打分系统，
+#: 而打分系统会让人不敢参加自己不擅长的事。
+evidence = sa.Table(
+    "evidence",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("event_id", sa.Uuid, nullable=False),
+    #: photo / note / artifact / link
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("body", sa.Text),
+    sa.Column("uri", sa.Text),
+    sa.Column("uploaded_by", sa.Uuid, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_evidence_event", "campus_id", "event_id"),
+)
+
+#: 记忆切面：一个人身上**可撤销**的一句话。
+#:
+#: 「他做完过一支 60 秒短片，负责剪辑」——它是下一次成局证明能引用的东西，
+#: 也是闭环合上的地方。
+#:
+#: 三条设计：
+#:
+#: **必须由本人逐项确认。** 系统抽出草稿，本人点过才算数。没点过的
+#: 永远不出现在任何人的证明里——这和助手草稿是同一条规则。
+#:
+#: **随时可撤销，撤销即时生效。** 不是"标记为已删除但还在用"。
+#: 撤销之后它从任何新的证明里消失，已经发出去的证明带有效期，会自然过期。
+#:
+#: **派生自证据，且指得回去。** 一条说不出来源的记忆，本人无从判断
+#: 该不该留着它。
+memory_facets = sa.Table(
+    "memory_facets",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("principal_id", sa.Uuid, nullable=False),
+    sa.Column("event_id", sa.Uuid),
+    sa.Column("text", sa.Text, nullable=False),
+    #: 派生自哪些证据。空表示这条是纯人工写的。
+    sa.Column("evidence_ids", PgArray(sa.Uuid), nullable=False, server_default="{}"),
+    #: draft / confirmed / revoked
+    #: **只有 confirmed 能被引用。** draft 是系统的猜测，
+    #: revoked 是本人收回过的话。
+    sa.Column("state", sa.Text, nullable=False, server_default="draft"),
+    #: 是不是 AI 抽的。本人要看得出来这句话是谁写的。
+    sa.Column("drafted_by_agent", sa.Boolean, nullable=False, server_default=sa.false()),
+    sa.Column("confirmed_at", sa.TIMESTAMP(timezone=True)),
+    sa.Column("revoked_at", sa.TIMESTAMP(timezone=True)),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_facets_principal_state", "campus_id", "principal_id", "state"),
+    sa.Index("ix_facets_event", "campus_id", "event_id"),
+)
+
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
 RLS_TABLES: tuple[str, ...] = (
     "principals",
@@ -437,4 +499,6 @@ RLS_TABLES: tuple[str, ...] = (
     "space_items",
     "negotiation_tasks",
     "negotiation_messages",
+    "evidence",
+    "memory_facets",
 )

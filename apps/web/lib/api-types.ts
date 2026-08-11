@@ -324,6 +324,151 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Waiting */
+        get: operations["waiting_api_me_waiting_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clearing:run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Clearing
+         * @description 把到点的市场单元结算一次。
+         *
+         *     它存在是为了让**推进时钟就能看到配队发生**——演示不需要真等六小时。
+         *     重复调用是安全的：同一个窗口内幂等。
+         */
+        post: operations["run_clearing_api_clearing_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/intents/{intent_id}/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Teams For
+         * @description 这条需求配到的小队。
+         *
+         *     只给 2–3 个。实证表明选择变多反而降低决策质量——搜索上限 3→100 时
+         *     福利显著下降。多给几个不是慷慨，是把决策成本转嫁给用户。
+         */
+        get: operations["teams_for_api_intents__intent_id__teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/intents/{intent_id}/blocked": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Blocked For
+         * @description 凑不出队时说什么。
+         *
+         *     这一屏最容易被做成一句"暂无结果"，而那正是用户流失的地方。
+         */
+        get: operations["blocked_for_api_intents__intent_id__blocked_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals/{proposal_id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Gate Status */
+        get: operations["gate_status_api_proposals__proposal_id__status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals/{proposal_id}:invite": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Invite
+         * @description 给这一版条款的每个成员开一条待答复。重复调用不重置任何人的答复。
+         */
+        post: operations["invite_api_proposals__proposal_id__invite_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proposals/{proposal_id}:decide": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide
+         * @description 一个真人做出决定。
+         *
+         *     **身份取自请求头，不取自请求体**——请求体里带 principal_id
+         *     等于任何人都能替任何人承诺，而承诺只接受真人签名的命令。
+         */
+        post: operations["decide_api_proposals__proposal_id__decide_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -360,6 +505,33 @@ export interface components {
             agent_reply_policy: string;
             /** Matching Window Seconds */
             matching_window_seconds: number;
+        };
+        /**
+         * BlockedOut
+         * @description 「还差这几件事」那一屏。凑不出队时把挫败换成一个具体的下一步。
+         */
+        BlockedOut: {
+            /** Stage */
+            stage: string;
+            /** Statement */
+            statement: string;
+            /** Causes */
+            causes: string[];
+            /** Relaxations */
+            relaxations: components["schemas"]["RelaxationOut"][];
+            /** Next Steps */
+            next_steps: components["schemas"]["NextStepOut"][];
+        };
+        /** ClearingOut */
+        ClearingOut: {
+            /** Considered */
+            considered: number;
+            /** Proposed */
+            proposed: number;
+            /** Blocked */
+            blocked: number;
+            /** Early */
+            early: number;
         };
         /** CompileRequest */
         CompileRequest: {
@@ -402,6 +574,8 @@ export interface components {
             /** Expression */
             expression: string;
             content: components["schemas"]["IntentContentIn"];
+            /** Action Kind */
+            action_kind?: string | null;
             /**
              * Stash
              * @default false
@@ -435,6 +609,13 @@ export interface components {
              * @default []
              */
             qualifications: string[];
+        };
+        /** DecideRequest */
+        DecideRequest: {
+            /** Answer */
+            answer: string;
+            /** Condition */
+            condition?: string | null;
         };
         /** EnvelopeOut */
         EnvelopeOut: {
@@ -473,6 +654,36 @@ export interface components {
              * @default []
              */
             options: string[];
+        };
+        /**
+         * GapOut
+         * @description 一样本事：多少人要、多少人给得出。只给聚合数，不给名字。
+         */
+        GapOut: {
+            /** Skill */
+            skill: string;
+            /** Wanted */
+            wanted: number;
+            /** Offered */
+            offered: number;
+            /** Scarce */
+            scarce: boolean;
+        };
+        /**
+         * GateStatusOut
+         * @description 还在等谁。**已决的折叠起来，这里只出未决的。**
+         */
+        GateStatusOut: {
+            /** Verdict */
+            verdict: string;
+            /** Waiting On */
+            waiting_on?: string[];
+            /** Conditions */
+            conditions?: string[];
+            /** Formed Event Id */
+            formed_event_id?: string | null;
+            /** Space Id */
+            space_id?: string | null;
         };
         /** GrantIn */
         GrantIn: {
@@ -619,6 +830,15 @@ export interface components {
             expires_at?: string | null;
             /** Is Matchable */
             is_matchable: boolean;
+            /** Action Kind */
+            action_kind?: string | null;
+        };
+        /** NextStepOut */
+        NextStepOut: {
+            /** Kind */
+            kind: string;
+            /** Invitation */
+            invitation: string;
         };
         /** OpportunityOut */
         OpportunityOut: {
@@ -672,12 +892,35 @@ export interface components {
             /** Withheld */
             withheld: string[];
         };
+        /** ProofLineOut */
+        ProofLineOut: {
+            /** Text */
+            text: string;
+            /** Source */
+            source: string;
+        };
         /** PutEnvelopeRequest */
         PutEnvelopeRequest: {
             /** Grants */
             grants?: components["schemas"]["GrantIn"][];
             /** Cited Facet Ids */
             cited_facet_ids?: string[];
+        };
+        /** RelaxationOut */
+        RelaxationOut: {
+            /** Field Name */
+            field_name: string;
+            /** Invitation */
+            invitation: string;
+            /** Gains */
+            gains: number;
+            /** Advisable */
+            advisable: boolean;
+            /**
+             * Caution
+             * @default
+             */
+            caution: string;
         };
         /** ReviseIntentRequest */
         ReviseIntentRequest: {
@@ -727,6 +970,39 @@ export interface components {
             /** Hints */
             hints: components["schemas"]["HintOut"][];
         };
+        /** TeamMemberOut */
+        TeamMemberOut: {
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
+            /** Display Name */
+            display_name: string;
+        };
+        /**
+         * TeamOut
+         * @description 一个小队。**没有分数，没有百分比**——理由是逐条的。
+         */
+        TeamOut: {
+            /**
+             * Proposal Id
+             * Format: uuid
+             */
+            proposal_id: string;
+            /** Members */
+            members: components["schemas"]["TeamMemberOut"][];
+            /** Why These People */
+            why_these_people: components["schemas"]["ProofLineOut"][];
+            /** Left To Humans */
+            left_to_humans: components["schemas"]["ProofLineOut"][];
+            /** Uncertainties */
+            uncertainties: components["schemas"]["ProofLineOut"][];
+            /** Stability Note */
+            stability_note?: string | null;
+            /** Expires At */
+            expires_at: string;
+        };
         /** TeamSizeOut */
         TeamSizeOut: {
             /** Minimum */
@@ -759,6 +1035,26 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * WaitingOut
+         * @description 「等配队」那一屏。
+         *
+         *     光说"请稍候"用户只会走掉；说"现在 12 个人缺剪辑，只有 3 个人会"，
+         *     他就知道该改需求、该去拉人、还是该自己顶上。
+         */
+        WaitingOut: {
+            /** Next Round At */
+            next_round_at: string;
+            /** Waiting Count */
+            waiting_count: number;
+            /** Gaps */
+            gaps: components["schemas"]["GapOut"][];
+            /**
+             * Can Still Revise
+             * @default true
+             */
+            can_still_revise: boolean;
         };
     };
     responses: never;
@@ -1315,6 +1611,242 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StashHintOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    waiting_api_me_waiting_get: {
+        parameters: {
+            query?: {
+                action_kind?: string | null;
+            };
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_clearing_api_clearing_run_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    teams_for_api_intents__intent_id__teams_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    blocked_for_api_intents__intent_id__blocked_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BlockedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    gate_status_api_proposals__proposal_id__status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GateStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_api_proposals__proposal_id__invite_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GateStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_api_proposals__proposal_id__decide_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DecideRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GateStatusOut"];
                 };
             };
             /** @description Validation Error */

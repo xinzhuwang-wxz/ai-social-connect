@@ -121,6 +121,7 @@ def create_intent(
         raw_expression=payload.expression,
         content=_to_domain(payload.content),
         created_at=clock.now(),
+        action_kind=payload.action_kind,
     )
     repos.intents.save(signal)
     return IntentOut.of(signal)
