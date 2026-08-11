@@ -233,6 +233,22 @@ describe("三个动作", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 
+  it("拒绝之后剩下的人已经被重新配过，不用干等下一轮", async () => {
+    const calls = mockApi({
+      afterDecide: { verdict: "declined", waiting_on: [], conditions: [], reformed_teams: 2 },
+    });
+    render(<TeamsScreen intentId={INTENT_ID} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "我不参加" }));
+    expect(await screen.findByText(/重新配了 2 个小队/)).toBeVisible();
+
+    const before = calls.filter((c) => c.url.endsWith("/teams")).length;
+    await userEvent.click(screen.getByRole("button", { name: "看看新配的" }));
+    await waitFor(() => {
+      expect(calls.filter((c) => c.url.endsWith("/teams")).length).toBe(before + 1);
+    });
+  });
+
   it("拒绝和加入摆在一起，不做成灰色小字", async () => {
     mockApi();
     render(<TeamsScreen intentId={INTENT_ID} />);
@@ -422,6 +438,7 @@ describe("语言", () => {
     const { container } = render(<TeamsScreen intentId={INTENT_ID} />);
 
     await screen.findByRole("heading", { name: "还差这几件事" });
+    await screen.findByText(BLOCKED.statement);
     for (const step of BLOCKED.next_steps) {
       await userEvent.click(screen.getByRole("button", { name: step.invitation }));
     }

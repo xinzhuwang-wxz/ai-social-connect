@@ -15,6 +15,7 @@
     "gen:api": "cd apps/api && uv run python ../../scripts/export_openapi.py && cd ../web && pnpm gen:api",
     "check:contract": "pnpm gen:api && git diff --exit-code artifacts/openapi.json apps/web/lib/api-types.ts",
     "lint:vocabulary": "uv run --project apps/api python scripts/check_vocabulary.py",
-    "check": "pnpm test && pnpm typecheck && pnpm lint:domain-purity && pnpm lint:vocabulary && pnpm check:contract"
+    "check": "pnpm test && pnpm typecheck && pnpm lint:domain-purity && pnpm lint:vocabulary && pnpm check:contract",
+    "e2e:persona-walkthrough": "pnpm --filter web test persona"
   }
 }

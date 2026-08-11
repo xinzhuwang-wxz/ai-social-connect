@@ -312,7 +312,12 @@ function Answered({
 }) {
   if (mine === DECLINED) {
     // 零负担：不追问理由，不解释后果，不给"再想想"。
-    return <p className="text-[15px]">知道了。这次就到这里。</p>;
+    return (
+      <div>
+        <p className="text-[15px]">知道了。这次就到这里。</p>
+        <Reformed status={status} onRevised={onRevised} />
+      </div>
+    );
   }
 
   const verdict = status?.verdict;
@@ -342,7 +347,12 @@ function Answered({
 
   if (verdict === "declined") {
     // 谁拒绝的不显示——拒绝的人不必向任何人解释。
-    return <p className="text-[15px]">有人这次不参加，这一版先停下了。</p>;
+    return (
+      <div>
+        <p className="text-[15px]">有人这次不参加，这一版先停下了。</p>
+        <Reformed status={status} onRevised={onRevised} />
+      </div>
+    );
   }
 
   if (verdict === "expired") {
@@ -359,6 +369,37 @@ function Answered({
           ? "你的答复已经发出去了。"
           : "还差几个人点头。"}
     </p>
+  );
+}
+
+/**
+ * 有人不参加之后，剩下的人已经被重新配过一次。
+ *
+ * 这一句不是锦上添花：一次拒绝如果只留下"停下了"，发起人就只能干等到下一轮，
+ * 而赶截止期的人正是最等不起的那个。后端已经立刻重配过了，界面不说，等于白做。
+ */
+function Reformed({
+  status,
+  onRevised,
+}: {
+  status: GateStatus | null;
+  onRevised: () => void;
+}) {
+  const count = status?.reformed_teams ?? 0;
+  if (count <= 0) return null;
+  return (
+    <div className="mt-2">
+      <p className="text-[13px] text-ink-soft">
+        已经用剩下的人重新配了 {count} 个小队，不用等下一轮。
+      </p>
+      <button
+        type="button"
+        onClick={onRevised}
+        className="mt-1 text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
+      >
+        看看新配的
+      </button>
+    </div>
   );
 }
 
