@@ -16,6 +16,7 @@ dependencies = [
     "ortools>=9.15.6755",
     "pgvector>=0.5.0",
     "a2a-sdk>=1.1.2",
+    "litellm>=1.96.0",
 ]
 
 [dependency-groups]
