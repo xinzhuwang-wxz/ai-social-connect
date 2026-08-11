@@ -116,7 +116,7 @@ def check(
         # 没有第二个组，就没有「别处」——通过是必然的，所以这句话必须说清它没在承诺什么。
         return StabilityVerdict(passed=True, statement=_nothing_to_compare(groups))
 
-    run = max(1, requirement.contiguous_slots)
+    run = max(1, requirement.contiguous_run)
     weights = _solver_weights(groups)
 
     # 每个人在他现在所在的每个组里过得多好。算一次存下来：接纳判定要反复用它。

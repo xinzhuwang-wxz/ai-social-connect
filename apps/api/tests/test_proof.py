@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from cofield.domain.model.consent import DELIBERATELY_UNGRANTABLE
 from cofield.matching.contracts import (
     CandidateGroup,
     Defection,
@@ -508,17 +509,31 @@ def test_a_proof_expires_before_the_people_in_it_move_on() -> None:
 # --- 与授权白名单的接缝 -----------------------------------------------------
 
 
-def test_the_grant_whitelist_has_no_name_for_three_things_the_proof_wants() -> None:
+def test_the_two_vocabularies_have_exactly_one_translation() -> None:
     """信封说 offers，证明问「能不能说他会剪辑」——两套词表必须有一处翻译。
 
-    而且有三样东西白名单里根本没有名字：在有人显式加进去之前，
-    它们永远引用不到。这条用例把这个事实钉住，别让它某天悄悄变了。
+    只有一处：两边各自拼字符串迟早对不上。
     """
     assert attributes_visible_under(frozenset({"offers", "time_window"})) == frozenset(
         {"skills", "availability"}
     )
     assert attributes_visible_under(frozenset()) == frozenset()
-    assert UNGRANTABLE == {"major", "confirmed_events", "active_commitments"}
+
+
+def test_how_busy_someone_is_can_never_be_said_out_loud() -> None:
+    """`active_commitments` 参与求解，但永远进不了证明。
+
+    「他手上已经有三件事」会被读成一个负面判断，而且没有人会主动选择
+    公布自己有多忙。它连 `SOLVER_ONLY` 那一档都不该占——它根本不是
+    用户填的，是系统数出来的。
+
+    `major` 和 `confirmed_events` 曾经也在这里，是被**显式提拔**出去的：
+    前者撑起「你们三个不同专业」，后者撑起「他有两次已确认的交付记录」，
+    没有后者 M4 的闭环判据无从谈起。提拔的理由写在 `GRANTABLE_FIELDS` 旁边。
+    """
+    assert UNGRANTABLE == DELIBERATELY_UNGRANTABLE
+    assert "active_commitments" in UNGRANTABLE
+    assert attributes_visible_under(frozenset({"active_commitments"})) == frozenset()
 
 
 def test_the_default_objectives_all_have_somewhere_to_go() -> None:

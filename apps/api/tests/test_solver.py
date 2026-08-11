@@ -21,6 +21,7 @@ from cofield.matching.contracts import (
     Requirement,
     SolveRequest,
     SolveResult,
+    SolverStatus,
 )
 from cofield.matching.funnel import contiguous_common_slots
 from cofield.matching.solver import _solver, solve
@@ -153,7 +154,7 @@ def test_perfect_skills_cannot_buy_a_time_conflict() -> None:
     result = solve(SolveRequest(requirement=_requirement(), candidates=pool, group_count=3))
 
     assert result.groups == ()
-    assert result.solver_status == "infeasible"
+    assert result.solver_status is SolverStatus.INFEASIBLE
     assert ConstraintKind.COMMON_TIME in _kinds(result)
 
 
@@ -273,7 +274,7 @@ def test_an_empty_pool_gets_no_invented_group() -> None:
     result = solve(SolveRequest(requirement=_requirement(()), candidates=(), group_count=3))
 
     assert result.groups == ()
-    assert result.solver_status == "infeasible"
+    assert result.solver_status is SolverStatus.INFEASIBLE
     assert _kinds(result) == {ConstraintKind.TEAM_SIZE}
 
 
@@ -306,7 +307,7 @@ def test_the_slots_it_reports_are_really_common_to_everyone() -> None:
     assert result.groups
     for group in result.groups:
         masks = [m.availability for m in group.members]
-        run = requirement.contiguous_slots
+        run = requirement.contiguous_run
 
         assert group.common_slots, "硬约束要求至少一段，报不出来就是没满足"
         assert len(group.common_slots) == contiguous_common_slots(masks, run=run)
@@ -384,5 +385,5 @@ def test_forty_candidates_and_six_groups_stay_inside_the_budget() -> None:
     result = solve(request)
 
     assert len(result.groups) == 6
-    assert result.solver_status in ("optimal", "feasible")
+    assert result.solver_status in (SolverStatus.OPTIMAL, SolverStatus.FEASIBLE)
     assert 0 < result.elapsed_seconds < request.feasible_seconds + request.improve_seconds

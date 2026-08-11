@@ -61,8 +61,14 @@ class Requirement:
     team_max: int
     deadline: datetime
     zone: str | None = None
-    #: 需要整组共同空闲的连续段数。
-    contiguous_slots: int = 2
+    #: 需要多长的一段整组共同空闲，单位是时段（每段约两小时）。
+    #:
+    #: 是**段长**不是段数——「至少存在一段连着 2 个时段都空着的时间」，
+    #: 不是「至少有 2 个这样的时间段可选」。原来的名字两种都读得通，
+    #: 实现按段长、注释按段数，改名把这个歧义消掉。
+    #: 默认 2 的依据是实测：任意单段几乎总能凑上（四人组 300 次里 285+ 次），
+    #: 连续两段才是真约束（四人组 50%，五人组 27%）。
+    contiguous_run: int = 2
     #: 每人最多同时参与几个共同事件。
     max_concurrent: int = 3
     excluded: frozenset[UUID] = frozenset()
@@ -83,6 +89,11 @@ class HardConstraint:
 
     kind: ConstraintKind
     detail: str
+    #: 放宽这一条能多出多少候选。`None` 表示这一层算不出来——
+    #: **算不出就留空，不要估**。一个编出来的数字会被用户当真去改需求，
+    #: 比不给数字伤害大。数字塞进 `detail` 字符串则机器读不了，
+    #: 「凑不出队」那一屏就没法做成可交互的。
+    relaxation_gain: int | None = None
 
 
 class ObjectiveKind(StrEnum):
@@ -132,7 +143,16 @@ class SolveRequest:
 
 @dataclass(frozen=True, slots=True)
 class ObjectiveContribution:
-    """某个目标项贡献了多少。证明里逐条引用它，不给总分。"""
+    """某个目标项贡献了多少。证明里逐条引用它，不给总分。
+
+    **`raw` 的量纲逐项不同**，六项分别是：覆盖到的技能数、互惠对数、
+    共同空闲段数、组内不同专业数、被提案次数之和、零历史成员数。
+    它们没有共同单位，所以加权求和得到的 `score` **只在同一次求解内部
+    可比**——不能拿去设阈值，不能跨活动比较，尤其不能当成"匹配度"给用户看。
+
+    `explanation` 是**审计用的原文**，不是产品文案：它由求解器生成，
+    没有过 07 的禁词检查。要给用户看的句子由成局证明那一层自己写。
+    """
 
     kind: ObjectiveKind
     raw: float
@@ -142,6 +162,8 @@ class ObjectiveContribution:
 
 @dataclass(frozen=True, slots=True)
 class CandidateGroup:
+    #: **含发起人，且他在首位。** 人数、角色覆盖、共同空闲都把他算进去——
+    #: 下游若当成"候选人列表"，人数会少算一个。
     members: tuple[Member, ...]
     #: 每个缺口由谁补。证明里「为什么是这几个人」直接用它。
     role_assignment: dict[str, UUID]
@@ -155,12 +177,34 @@ class CandidateGroup:
         return frozenset(m.principal_id for m in self.members)
 
 
+class SolverStatus(StrEnum):
+    """求解结束时的状态。
+
+    自由字符串会让下游只能靠字面量比较，改一个词就静默失配。更要紧的是
+    **`INFEASIBLE` 和 `TIMEOUT` 必须分得开**：前者是"真的没有"，
+    后者是"没来得及找"。把两者都说成"没找到"，用户会去放宽一个
+    其实不碍事的条件。
+    """
+
+    #: 证明了最优。
+    OPTIMAL = "optimal"
+    #: 有解，但预算用完了，没证明这是最好的。
+    FEASIBLE = "feasible"
+    #: 穷尽了，没有更多互不相同的组了。
+    EXHAUSTED = "exhausted"
+    #: 超时。**不等于无解**——诊断时必须当作"还有解"，否则会剔掉真凶。
+    TIMEOUT = "timeout"
+    #: 证明了无解。只有这一档才配得上阻塞证明。
+    INFEASIBLE = "infeasible"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True, slots=True)
 class SolveResult:
     groups: tuple[CandidateGroup, ...]
     #: 无解时说明是哪些硬约束共同导致的。不伪造候选。
     blocked_by: tuple[HardConstraint, ...] = ()
-    solver_status: str = "unknown"
+    solver_status: SolverStatus = SolverStatus.UNKNOWN
     elapsed_seconds: float = 0.0
 
 

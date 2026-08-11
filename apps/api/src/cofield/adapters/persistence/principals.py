@@ -42,6 +42,7 @@ class PrincipalRepository:
                 display_name=principal.display_name,
                 is_synthetic=principal.is_synthetic,
                 self_intro=principal.self_intro,
+                major=principal.major,
                 created_at=self._clock.now(),
             )
         )
@@ -58,6 +59,7 @@ class PrincipalRepository:
                     "campus_id": p.campus_id.value,
                     "display_name": p.display_name,
                     "self_intro": p.self_intro,
+                    "major": p.major,
                     "is_synthetic": p.is_synthetic,
                     "created_at": created_at,
                 }

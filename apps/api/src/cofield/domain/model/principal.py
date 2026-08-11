@@ -40,3 +40,8 @@ class Principal:
     #: 这类需求没有字段接得住，只有原话接得住。
     #: 它是可授权字段，不是默认公开（见 consent.GRANTABLE_FIELDS）。
     self_intro: str | None = None
+    #: 专业。参与 CROSS_MAJOR 软目标，也可被授权出现在成局证明里。
+    major: str | None = None
+    #: 已确认完成的事件数。**闭环靠它合上**——它是「上次一起完成过 X」
+    #: 这句话的唯一来源。派生自已确认的事件参与，不手工写。
+    confirmed_events: int = 0

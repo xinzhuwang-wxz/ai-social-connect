@@ -42,6 +42,7 @@ from cofield.matching.contracts import (
     Requirement,
     SolveRequest,
     SolveResult,
+    SolverStatus,
 )
 from cofield.matching.funnel import contiguous_common_slots
 
@@ -126,17 +127,17 @@ def _status(
     timed_out: bool,
     exhausted: bool,
     all_proven: bool,
-) -> str:
+) -> SolverStatus:
     """状态要能区分「真的没有」和「没来得及找」——两者的后续动作完全不同。"""
     if not groups:
         if blocked:
-            return "infeasible"
-        return "timeout" if timed_out else "exhausted"
+            return SolverStatus.INFEASIBLE
+        return SolverStatus.TIMEOUT if timed_out else SolverStatus.EXHAUSTED
     if timed_out:
-        return "timeout"
+        return SolverStatus.TIMEOUT
     if exhausted or len(groups) < wanted:
-        return "exhausted"
-    return "optimal" if all_proven else "feasible"
+        return SolverStatus.EXHAUSTED
+    return SolverStatus.OPTIMAL if all_proven else SolverStatus.FEASIBLE
 
 
 # --- 候选池 -----------------------------------------------------------------
@@ -163,7 +164,7 @@ def _kinds_in_play(requirement: Requirement, pool: Sequence[Member]) -> frozense
     kinds = {ConstraintKind.TEAM_SIZE}
     if requirement.needs:
         kinds.add(ConstraintKind.ROLE_COVERAGE)
-    if requirement.contiguous_slots > 0:
+    if requirement.contiguous_run > 0:
         kinds.add(ConstraintKind.COMMON_TIME)
     if requirement.zone and any(_out_of_zone(m, requirement.zone) for m in pool):
         kinds.add(ConstraintKind.ZONE)
@@ -211,7 +212,7 @@ def _program(
     requirement = request.requirement
     model = cp_model.CpModel()
     take = tuple(model.new_bool_var(f"take_{i}") for i in range(len(pool)))
-    run = max(1, requirement.contiguous_slots)
+    run = max(1, requirement.contiguous_run)
 
     if ConstraintKind.TEAM_SIZE in kinds:
         # 发起人已经占掉一个位置，剩下的名额才是可选的。
@@ -419,7 +420,7 @@ def _detail(kind: ConstraintKind, request: SolveRequest, pool: Sequence[Member])
         want = f"{requirement.team_min}–{requirement.team_max}"
         return f"可用候选 {len(pool)} 人，凑不出 {want} 人的组"
     if kind is ConstraintKind.COMMON_TIME:
-        return f"整组找不到 {requirement.contiguous_slots} 个连续时段的共同空闲"
+        return f"整组找不到 {requirement.contiguous_run} 个连续时段的共同空闲"
     if kind is ConstraintKind.ZONE:
         return f"候选里在{requirement.zone}的人不够"
     if kind is ConstraintKind.CONCURRENCY:
@@ -451,7 +452,7 @@ class _Scene:
 def _assemble(request: SolveRequest, picked: tuple[Member, ...]) -> CandidateGroup:
     requirement = request.requirement
     members = (requirement.requester, *picked)
-    run = max(1, requirement.contiguous_slots)
+    run = max(1, requirement.contiguous_run)
     common = _windows([m.availability for m in members], run)
     role_assignment = _assign_roles(requirement, members)
 
@@ -636,7 +637,7 @@ def _measure_time_slack(scene: _Scene) -> float:
 
     同一件事在两个地方各算一遍，迟早会算出两个数；这里只补它没给的位置。
     """
-    run = max(1, scene.requirement.contiguous_slots)
+    run = max(1, scene.requirement.contiguous_run)
     return float(contiguous_common_slots([m.availability for m in scene.members], run=run))
 
 

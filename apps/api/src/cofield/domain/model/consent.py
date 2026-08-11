@@ -50,8 +50,28 @@ GRANTABLE_FIELDS: frozenset[str] = frozenset(
         # 自己写的一段话。它进语义索引，所以**必须**可被逐项授权与撤回——
         # 撤回时连带删掉索引行，否则原话会继续参与别人的匹配。
         "self_intro",
+        # --- 属于「人」而不是「这次需求」的两项 ---
+        # 上面那些换一条需求就换一套；下面这两项换多少条需求都是同一份。
+        # 混在一个白名单里看不出来，所以在这里标出来（并见 http/envelopes.PRINCIPAL_SCOPED）。
+        #
+        # 已确认完成的事件数。**闭环靠它合上**：没有它，成局证明就永远说不出
+        # 「他有两次已确认的短片交付记录」（02 §5.1 的设计示例），
+        # 而「记录改变下一次成局证明」这条 M4 判据也就无从谈起。
+        "confirmed_events",
+        # 专业。CROSS_MAJOR 是软目标，证明想说「你们三个不同专业」就得引用它。
+        # 它同时也是敏感信息，所以是**授权项**不是公开字段。
+        "major",
     }
 )
+
+#: 刻意**不**放进白名单的属性，以及为什么。
+#:
+#: `active_commitments`（当前并发承诺数）——它是求解侧的硬约束（CONCURRENCY），
+#: 但说出口就变了味：「他手上已经有三件事」会被读成一个负面判断，
+#: 而且没有人会主动选择公布自己有多忙。参与求解可以，出现在证明里不行。
+#: 这正是 `Audience.SOLVER_ONLY` 那一档存在的理由——但它连那一档都不该有，
+#: 因为它根本不是用户填的，是系统数出来的。
+DELIBERATELY_UNGRANTABLE: frozenset[str] = frozenset({"active_commitments"})
 
 
 @dataclass(frozen=True, slots=True)

@@ -94,6 +94,8 @@ _FIELD_LABELS = {
     "open_questions": "还没定的事",
     "portfolio_link": "作品链接",
     "self_intro": "我写的那段介绍",
+    "major": "我的专业",
+    "confirmed_events": "我做完过的事",
 }
 
 #: 属于**人**而不是**这条需求**的可授权字段。
@@ -101,7 +103,9 @@ _FIELD_LABELS = {
 #: 白名单里混了两种作用域：多数字段是这次说的话（换一条需求就换一套），
 #: 自我介绍是一贯的（换多少条需求都是同一段）。混在一起看不出来，
 #: 结果就是取值时去内容里找一个根本不在那儿的字段，界面上显示成英文字段名。
-PRINCIPAL_SCOPED: frozenset[str] = frozenset({"self_intro"})
+PRINCIPAL_SCOPED: frozenset[str] = frozenset(
+    {"self_intro", "major", "confirmed_events"}
+)
 
 
 def _content_field(content: IntentContent, name: str) -> object:
@@ -137,7 +141,7 @@ def _present(content: IntentContent, author: Principal | None, name: str) -> boo
     而不是摆一排灰控件让人对着犹豫。
     """
     if name in PRINCIPAL_SCOPED:
-        return bool(author is not None and author.self_intro)
+        return author is not None and bool(getattr(author, name, None))
     return _content_field(content, name) not in (None, [], "")
 
 

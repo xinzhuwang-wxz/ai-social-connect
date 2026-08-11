@@ -86,9 +86,16 @@ def attributes_visible_under(granted: frozenset[str]) -> frozenset[str]:
 
     信封说的是「offers 可以给候选看」，证明问的是「能不能说周雨会剪辑」。
     中间这一次翻译必须存在且只有一处，否则两边各自拼字符串迟早对不上。
+
+    **这里自己也要挡一道白名单。** `FieldGrant` 构造时会拒绝不可授权的字段，
+    所以正常路径上传不进来；但翻译函数不该依赖"调用方一定走过构造器"这个假设——
+    直接拼一个集合传进来就绕过去了。默认拒绝要在每一道门上都成立，
+    不是只在第一道门上成立。
     """
     return frozenset(
-        attribute for attribute, name in GRANT_NAMES.items() if name in granted
+        attribute
+        for attribute, name in GRANT_NAMES.items()
+        if name in granted and name in GRANTABLE_FIELDS
     )
 
 
@@ -232,14 +239,14 @@ def _roles(scene: _Scene) -> list[ProofLine]:
 def _time(scene: _Scene) -> list[ProofLine]:
     """为什么是现在。
 
-    `common_slots` 是连续段的**起点**，段长由 `contiguous_slots` 决定，
+    `common_slots` 是连续段的**起点**，段长由 `contiguous_run` 决定，
     所以 `refers_to` 指起点就够——指到段内每一格反而会指出输入里没有的东西。
     """
     slots = _valid_slots(scene)
     if not slots:
         return []  # 根本没有都空着的时间，那是冲突，不是依据
 
-    run = max(1, scene.requirement.contiguous_slots)
+    run = max(1, scene.requirement.contiguous_run)
     if not scene.may_cite("availability"):
         return [
             ProofLine(
