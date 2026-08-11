@@ -20,6 +20,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import { pendingInvitations } from "@/lib/inbox";
 
 /** 用户会主动去的四个地方。措辞用动词，不用名词——
  *  "我的记录"是个抽屉，"说一件事"是个动作。 */
@@ -32,6 +35,16 @@ const PLACES = [
 
 export function SiteNav() {
   const here = usePathname();
+  // 有人在等你答复。**这是"被邀请的那一侧"唯一的入口**——
+  // 没有它，被邀请的人不知道有这回事，那一整屏等于不存在。
+  const [waiting, setWaiting] = useState(0);
+
+  useEffect(() => {
+    const stop = new AbortController();
+    void pendingInvitations(stop.signal).then(setWaiting);
+    return () => stop.abort();
+    // 换页时重数一次：刚答复完就该看到数字变小，否则用户会以为没生效。
+  }, [here]);
 
   return (
     <nav aria-label="主导航" className="border-b border-line bg-paper">
@@ -39,6 +52,22 @@ export function SiteNav() {
         <Link href="/" className="mr-4 text-sm font-medium tracking-tight">
           共域
         </Link>
+        {waiting > 0 && (
+          <Link
+            href="/invitations"
+            aria-current={here.startsWith("/invitations") ? "page" : undefined}
+            className={
+              "rounded-md px-3 py-1.5 text-sm transition-colors " +
+              (here.startsWith("/invitations")
+                ? "bg-accent-soft text-accent"
+                : "text-ink hover:text-accent")
+            }
+          >
+            {/* 只在真有人等的时候出现。常驻一个「0」比不显示更差——
+                它每天提醒你这里什么都没有。 */}
+            有 {waiting} 件事等你答复
+          </Link>
+        )}
         {PLACES.map((place) => {
           // 首页只在完全相等时高亮：否则它在每一页上都亮着，
           // 等于没有"我现在在哪"这个信息。

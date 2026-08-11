@@ -14,11 +14,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SiteNav } from "@/components/site-nav";
 
 let here = "/";
+let waiting = 0;
 vi.mock("next/navigation", () => ({ usePathname: () => here }));
+vi.mock("@/lib/inbox", () => ({ pendingInvitations: async () => waiting }));
 
 describe("常驻导航", () => {
   beforeEach(() => {
     here = "/";
+    waiting = 0;
   });
 
   it("从任何一页都到得了四个主要去处", () => {
@@ -75,6 +78,24 @@ describe("常驻导航", () => {
       if (term === "共域") continue;
       expect(text).not.toContain(term);
     }
+  });
+
+  it("有人在等你答复时，那一条出现在最显眼的位置", async () => {
+    // 这是「被邀请的那一侧」唯一的入口。没有它，被邀请的人不知道有这回事，
+    // 那一整屏等于不存在——他只能自己想起来去翻，而没人会。
+    waiting = 2;
+    render(<SiteNav />);
+
+    const entry = await screen.findByRole("link", { name: /2 件事等你答复/ });
+    expect(entry).toHaveAttribute("href", "/invitations");
+  });
+
+  it("没人等的时候不显示它", async () => {
+    // 常驻一个「0」比不显示更差：它每天提醒你这里什么都没有。
+    render(<SiteNav />);
+    await screen.findByRole("link", { name: "说一件事" });
+
+    expect(screen.queryByText(/件事等你答复/)).toBeNull();
   });
 
   it("入口不超过四个", () => {
