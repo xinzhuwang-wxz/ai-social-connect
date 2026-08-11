@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -276,8 +277,13 @@ def test_a_calendar_that_was_not_shared_keeps_the_conclusion_and_drops_the_days(
 
     没获准露出日程时降级的是具体，不是诚实——那条硬约束确实被满足了，
     这句话仍然要说得出口。
+
+    显式打开时间约束（ADR 0006 之后它默认关着）：只有约束真的施加过，
+    才存在一个"结论"值得在降级时保住。约束关着的时候是另一回事，
+    见下一条。
     """
     group, requirement, verdict = _case()
+    requirement = replace(requirement, contiguous_run=2)
     proof = build(
         group,
         requirement,
@@ -293,6 +299,41 @@ def test_a_calendar_that_was_not_shared_keeps_the_conclusion_and_drops_the_days(
         token.startswith("slot:") for line in _lines(proof) for token in line.refers_to
     )
     assert any("有空的时间" in line.text for line in proof.satisfied)
+
+
+def test_without_the_constraint_and_without_the_calendar_it_says_nothing() -> None:
+    """时间约束关着、日程又没获准——这时候什么都不说。
+
+    硬凑一句"时间上应该没问题"是这一层最不该做的事：它既不是求解器的
+    结论（约束根本没施加），也不是别人的切面（没获准），
+    那它只能是系统自己编的。
+    """
+    group, requirement, verdict = _case()
+
+    proof = build(
+        group,
+        requirement,
+        verdict,
+        now=NOW,
+        visible_fields=ALL_VISIBLE - {"availability"},
+    )
+
+    assert not any("有空的时间" in line.text for line in proof.satisfied)
+
+
+def test_a_time_that_merely_looks_free_says_so() -> None:
+    """约束关着但日程获准时，说得出具体时段——**但要说清它只是看着空**。
+
+    课表是三周前填的"通常有空"，不是承诺。少了这半句，用户会把它
+    当成已经约好了，然后照着去约人。
+    """
+    group, requirement, verdict = _case()
+
+    proof = build(group, requirement, verdict, now=NOW, visible_fields=ALL_VISIBLE)
+    times = [line.text for line in proof.satisfied if "都空着" in line.text]
+
+    assert times, "日程获准了却一个字都不说，等于白授权"
+    assert any("还得你们自己定" in text for text in times)
 
 
 def test_who_fills_which_gap_needs_permission_but_the_coverage_does_not() -> None:

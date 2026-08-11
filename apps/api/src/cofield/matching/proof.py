@@ -237,17 +237,33 @@ def _roles(scene: _Scene) -> list[ProofLine]:
 
 
 def _time(scene: _Scene) -> list[ProofLine]:
-    """为什么是现在。
+    """时间。**它不再是一条保证。**
 
-    `common_slots` 是连续段的**起点**，段长由 `contiguous_run` 决定，
-    所以 `refers_to` 指起点就够——指到段内每一格反而会指出输入里没有的东西。
+    时间已经不是硬约束（ADR 0006）：求解器不再因为凑不出共同空闲而判无解，
+    所以"你们凑得出一段都有空的时间"这句话即使成立也只是**碰巧成立**，
+    不是系统给的承诺。
+
+    这个区别不是措辞讲究——用户会按证明里的话去安排。说成保证，
+    他会照着约人，然后发现约不上；而系统在那之后什么也做不了。
+
+    所以：
+    - 约束**显式打开**（`contiguous_run > 0`）时，它才是一条依据
+    - 否则它只是一条**可能有用的观察**，措辞上必须听得出来"还得你们自己定"
+
+    `common_slots` 是连续段的起点，`refers_to` 指起点就够——
+    指到段内每一格反而会指出输入里没有的东西。
     """
     slots = _valid_slots(scene)
     if not slots:
         return []  # 根本没有都空着的时间，那是冲突，不是依据
 
+    guaranteed = scene.requirement.contiguous_run > 0
     run = max(1, scene.requirement.contiguous_run)
     if not scene.may_cite("availability"):
+        if not guaranteed:
+            # 说不出具体时段，又不是硬约束——那就没有任何值得说的东西。
+            # 硬凑一句"时间上应该没问题"是这一层最不该做的事。
+            return []
         return [
             ProofLine(
                 source=EvidenceSource.SOLVER_CONSTRAINT,
@@ -261,6 +277,10 @@ def _time(scene: _Scene) -> list[ProofLine]:
     text = f"{'、'.join(span)}，你们{scene.head_count}个都空着。"
     if len(slots) > 1:
         text += f"另外还有{_count(len(slots) - 1)}段这样的时间。"
+    if not guaranteed:
+        # 课表是三周前填的"通常有空"，不是承诺。不加这半句，
+        # 用户会把它当成已经约好了。
+        text += "这只是课表上看着空，具体哪天还得你们自己定。"
     return [
         ProofLine(
             source=EvidenceSource.SOLVER_CONSTRAINT,
