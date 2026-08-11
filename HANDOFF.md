@@ -6,7 +6,7 @@
 
 ## 一句话状态
 
-产品方向、系统边界、开源选型、PRD 与 15 个可执行 issue 全部就绪，**尚未写任何代码**。
+产品方向、系统边界、开源选型、PRD 与 16 个可执行 issue 全部就绪，**尚未写任何代码**。
 
 ---
 
@@ -23,7 +23,7 @@
 | 仿真与测试人口 | [`docs/06-仿真与测试人口.md`](./docs/06-仿真与测试人口.md) |
 | 产品语言与界面原则 | [`docs/07-产品语言与界面原则.md`](./docs/07-产品语言与界面原则.md) |
 | 前端规格（每屏数据契约） | [`docs/08-前端规格.md`](./docs/08-前端规格.md) |
-| PRD（152 条用户故事） | [`docs/prd/01-共域平台.md`](./docs/prd/01-共域平台.md) |
+| PRD（163 条用户故事） | [`docs/prd/01-共域平台.md`](./docs/prd/01-共域平台.md) |
 | 16 个 tracer bullet issue | GitHub `xinzhuwang-wxz/ai-social-connect` |
 
 ---
@@ -124,6 +124,6 @@ gh issue view 1
 ## 未做的事
 
 - **Tara 实际界面未查看**（Chrome 扩展未连接）。08 的视觉语言部分是推断，拿到截图后需校准
-- issue 之外的任务拆分（15 片可再拆子任务）
+- issue 之外的任务拆分（16 片可再拆子任务）
 - CI 配置（术语黑名单检查、`now()` 静态检查、契约测试都还只是 PRD 里的要求）
 - `/setup-matt-pocock-skills` 未跑，issue tracker 词表未配置
