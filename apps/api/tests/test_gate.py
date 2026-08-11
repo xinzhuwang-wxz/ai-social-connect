@@ -532,3 +532,47 @@ def test_a_formed_event_stays_inside_its_tenant(engine: Engine) -> None:
         ).scalar_one()
 
     assert leaked == 0
+
+
+# --- 有人拒绝之后 ---
+
+
+def test_a_refusal_immediately_asks_for_a_re_solve(engine: Engine) -> None:
+    """一次拒绝不该让发起人干等到下一个窗口。
+
+    赶截止期的人等不起，而那正是他最需要系统帮忙的时刻。所以门在作废这一版
+    的同时，把**拒绝的人**交出去，让调用方立刻用剩下的人重解。
+
+    排除是**这一次**的，不写进任何长期状态：他这次不方便，不代表下次也不。
+    """
+    a, b, c = _members(3)
+    proposal_id = _seed_proposal(engine, members=(a, b, c))
+
+    with campus_connection(engine, SIM) as conn:
+        gate = ConfirmationGate(conn, SIM)
+        gate.invite(proposal_id, now=NOW)
+        gate.decide(proposal_id, a, state=CommitmentState.ACCEPTED, now=NOW)
+        outcome = gate.decide(proposal_id, b, state=CommitmentState.DECLINED, now=NOW)
+
+    assert outcome.resolve_excluding == frozenset({b})
+    assert outcome.formed is None
+
+
+def test_accepting_never_asks_for_a_re_solve(engine: Engine) -> None:
+    """只有拒绝才触发重解。等人的时候重解会把还没回的人换掉，
+    而他可能只是还没看到消息。"""
+    people = _members(2)
+    proposal_id = _seed_proposal(engine, members=people)
+
+    with campus_connection(engine, SIM) as conn:
+        gate = ConfirmationGate(conn, SIM)
+        gate.invite(proposal_id, now=NOW)
+        waiting = gate.decide(
+            proposal_id, people[0], state=CommitmentState.ACCEPTED, now=NOW
+        )
+        formed = gate.decide(
+            proposal_id, people[1], state=CommitmentState.ACCEPTED, now=NOW
+        )
+
+    assert waiting.resolve_excluding == frozenset()
+    assert formed.resolve_excluding == frozenset()

@@ -39,6 +39,13 @@ class Outcome:
     #: 事务回滚掉一个本该存在的事件，用户会以为系统坏了；
     #: 而多发一张令牌给一个不存在的空间，是一个真实的权限泄漏。
     grant_agent_for_space: UUID | None = None
+    #: 有人拒绝时，**立刻**用剩下的人重新求解，把拒绝的人排除掉。
+    #:
+    #: 不这么做的话，一次拒绝就等于让发起人干等到下一个窗口——而赶截止期的人
+    #: 等不起，这正是他最需要系统帮忙的时刻。空集表示这次不用重解。
+    #:
+    #: 排除是**这一次**的，不是永久拉黑：他这次不方便，不代表下次也不。
+    resolve_excluding: frozenset[UUID] = frozenset()
 
 
 class ConfirmationGate:
@@ -102,8 +109,14 @@ class ConfirmationGate:
 
         if verdict.verdict is GateVerdict.DECLINED:
             # 体面结束：作废这一版，不留任何关系边，也不给拒绝的人留记录。
+            #
+            # 但**不能就这么停下**。一次拒绝让发起人干等到下一个窗口，
+            # 而赶截止期的人等不起。把拒绝的人交出去，让调用方立刻重解。
             self._withdraw(proposal_id, now=now)
-            return Outcome(state=verdict)
+            return Outcome(
+                state=verdict,
+                resolve_excluding=frozenset(verdict.declined_by),
+            )
 
         if not verdict.can_form:
             return Outcome(state=verdict)

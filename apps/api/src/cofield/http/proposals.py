@@ -14,10 +14,12 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
+import sqlalchemy as sa
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from cofield.adapters.persistence.proposals import ProposalRepository
+from cofield.adapters.persistence.schema import formation_proposals
 from cofield.catalog import registry as action_kinds
 from cofield.formation.gate import CommitmentState
 from cofield.formation.service import ConfirmationGate
@@ -109,6 +111,10 @@ class GateStatusOut(BaseModel):
     conditions: list[str] = Field(default_factory=list)
     formed_event_id: UUID | None = None
     space_id: UUID | None = None
+    #: 有人拒绝之后立刻重解产出了几个新小队。
+    #: 界面据此说"有人这次去不了，我又给你找了两组"，
+    #: 而不是让发起人对着一句"对方拒绝了"干等到下一个窗口。
+    reformed_teams: int = 0
 
 
 class DecideRequest(BaseModel):
@@ -279,6 +285,7 @@ def decide(
     conn: ConnDep,
     campus: CampusDep,
     clock: ClockDep,
+    repos: ReposDep,
     principal_id: PrincipalDep,
 ) -> GateStatusOut:
     """一个真人做出决定。
@@ -304,16 +311,40 @@ def decide(
         # 它们是用户能理解并改正的情况，不是服务出错。
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
+    # 有人拒绝就**立刻**用剩下的人重解，不等下一个窗口。
+    # 赶截止期的人等不起，而那正是他最需要系统帮忙的时刻。
+    reformed = 0
+    if outcome.resolve_excluding:
+        intent = repos.intents.get(_intent_of(conn, proposal_id))
+        if intent is not None:
+            reformed = Clearing(conn, campus, action_kinds).resolve_again(
+                intent, excluding=outcome.resolve_excluding, now=clock.now()
+            )
+
     return GateStatusOut(
         verdict=outcome.state.verdict.value,
         waiting_on=list(outcome.state.waiting_on),
         conditions=[text for _, text in outcome.state.conditions],
         formed_event_id=outcome.formed.event_id if outcome.formed else None,
         space_id=outcome.formed.space_id if outcome.formed else None,
+        reformed_teams=reformed,
     )
 
 
 # --- 内部 ---
+
+
+def _intent_of(conn: ConnDep, proposal_id: UUID) -> UUID:
+    """这个提案回应的是哪条需求。"""
+    return UUID(
+        str(
+            conn.execute(
+                sa.select(formation_proposals.c.intent_id).where(
+                    formation_proposals.c.id == proposal_id
+                )
+            ).scalar_one()
+        )
+    )
 
 
 def _names(repos: ReposDep, rows: list[Any]) -> dict[UUID, str]:

@@ -469,6 +469,201 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/item-kinds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Item Kinds
+         * @description 能往空间里放哪几类东西。
+         *
+         *     新增一种条目时这里自动多一项，前端不改代码——和首屏的场景引子
+         *     是同一个扩展点思路。
+         */
+        get: operations["list_item_kinds_api_item_kinds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Space
+         * @description 共域一屏。
+         *
+         *     新空间返回的是一个可用的空态——`summary` 说"还没有要做的事"，
+         *     不是错误也不是一片空白。一屏能看见的四件事都在分组里。
+         */
+        get: operations["get_space_api_spaces__space_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Item
+         * @description 往画布上放一条东西。
+         *
+         *     放的人是请求头里的那个人。请求体里写谁都不算——`created_by` 由这一层
+         *     填，不接受任何外部输入。
+         */
+        post: operations["add_item_api_spaces__space_id__items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Revise Item
+         * @description 推进一步、换个负责人，或者改谁能看见。
+         *
+         *     要真人点头的那一类走不到终态：那条路只有 `:confirm`。留一条 `advance`
+         *     的后门，"助手关不掉决策门"就白写了——而后门在 HTTP 上比在库里更好找。
+         */
+        patch: operations["revise_item_api_spaces__space_id__items__item_id__patch"];
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/items/{item_id}:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Item
+         * @description 点头。
+         *
+         *     点头的是请求头里的那个人，这个端点**没有请求体**——身份可以由请求体
+         *     决定的话，"谁点的头"就成了一句可以随便填的话。
+         *
+         *     全体点齐才算关上。少一个人就关上等于"没读的人默认被代表"，
+         *     那正是群聊做错的事。
+         */
+        post: operations["confirm_item_api_spaces__space_id__items__item_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/agent:toggle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toggle Agent
+         * @description 开关助手。
+         *
+         *     关掉之后返回的仍然是完整的一屏——这正是要给前端看的：**人工那几栏
+         *     一条都没少**，只是"等你过目"那一栏空了。草稿的行还留在库里，
+         *     重新打开它们原样回来。
+         *
+         *     这里不动策略纪元：令牌活不过一个请求，没有需要作废的旧令牌。
+         */
+        post: operations["toggle_agent_api_spaces__space_id__agent_toggle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Suggestions
+         * @description 助手看了一眼空间，给几条下一步。
+         *
+         *     **助手关着的时候返回空列表，HTTP 200。** 关掉助手是一个正常状态不是
+         *     一次故障——回 4xx 会让界面弹一个红框，等于把用户自己的选择显示成
+         *     出了问题。模型说不出话（服务挂了、磁带没命中）也一样：闭嘴，不报错。
+         *
+         *     建议不落库。刷一次屏就往画布上写一条，那一栏很快就成了垃圾堆——
+         *     真人按下"采纳"它才进画布。
+         */
+        get: operations["list_suggestions_api_spaces__space_id__suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/suggestions:accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Suggestion
+         * @description 采纳一条建议：把它放进画布，并记下是谁认的。
+         *
+         *     逐条采纳，没有一键全收——一键全收和让助手自己写进去没有区别，
+         *     中间那个人只是按了一下。落进来的条目**两个署名都留着**：
+         *     `drafted_by_agent` 记它是助手写的，`accepted_by` 记是谁认的。
+         */
+        post: operations["accept_suggestion_api_spaces__space_id__suggestions_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -490,6 +685,25 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AcceptSuggestionRequest
+         * @description 采纳一条建议。
+         *
+         *     带回 `grounded_in` 是因为建议本身不落库——助手每刷新一次屏幕就往画布上
+         *     写一条，那一栏很快就成了垃圾堆。代价是这段文字由客户端带回来，
+         *     但**谁采纳的**记在 `accepted_by` 上，责任仍然落在按下按钮的那个人身上。
+         */
+        AcceptSuggestionRequest: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Grounded In
+             * @default []
+             */
+            grounded_in: string[];
+        };
         /** ActionKindOut */
         ActionKindOut: {
             /** Key */
@@ -505,6 +719,26 @@ export interface components {
             agent_reply_policy: string;
             /** Matching Window Seconds */
             matching_window_seconds: number;
+        };
+        /** AddItemRequest */
+        AddItemRequest: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /** Assignee Id */
+            assignee_id?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Extras
+             * @default {}
+             */
+            extras: {
+                [key: string]: unknown;
+            };
         };
         /**
          * BlockedOut
@@ -684,6 +918,11 @@ export interface components {
             formed_event_id?: string | null;
             /** Space Id */
             space_id?: string | null;
+            /**
+             * Reformed Teams
+             * @default 0
+             */
+            reformed_teams: number;
         };
         /** GrantIn */
         GrantIn: {
@@ -833,6 +1072,98 @@ export interface components {
             /** Action Kind */
             action_kind?: string | null;
         };
+        /**
+         * ItemKindOut
+         * @description 一种条目的声明。前端据此生成"放一条东西"的选项与表单。
+         */
+        ItemKindOut: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** States */
+            states: string[];
+            /** Done States */
+            done_states: string[];
+            /** Counts Toward Progress */
+            counts_toward_progress: boolean;
+            /** Needs Human Decision */
+            needs_human_decision: boolean;
+            /** Required Extras */
+            required_extras: string[];
+            /** Agent May Draft */
+            agent_may_draft: boolean;
+        };
+        /**
+         * ItemOut
+         * @description 画布上的一条东西。
+         *
+         *     `extras` 不原样透出：它在库里是开放的 JSON，透出去前端拿到的就是一个
+         *     `additionalProperties: true`，也就是回到手写类型。四个有约定含义的键在
+         *     这里显式成型；将来某种条目带了新键，这里补一行——契约本来就该是显式的。
+         */
+        ItemOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Space Id
+             * Format: uuid
+             */
+            space_id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body?: string | null;
+            /** State */
+            state: string;
+            /** Assignee Id */
+            assignee_id?: string | null;
+            /** Due At */
+            due_at?: string | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Drafted By Agent */
+            drafted_by_agent: boolean;
+            /** Accepted By */
+            accepted_by?: string | null;
+            /** Awaiting A Person */
+            awaiting_a_person: boolean;
+            /**
+             * Deciders
+             * @default []
+             */
+            deciders: string[];
+            /**
+             * Confirmed By
+             * @default []
+             */
+            confirmed_by: string[];
+            reach?: components["schemas"]["Reach"] | null;
+            /** Source */
+            source?: string | null;
+            /** Notice */
+            notice?: string | null;
+        };
         /** NextStepOut */
         NextStepOut: {
             /** Kind */
@@ -892,6 +1223,16 @@ export interface components {
             /** Withheld */
             withheld: string[];
         };
+        /**
+         * ProgressOut
+         * @description 做完了多少。**件数，不是百分比**——这个产品不做总分（07 §6）。
+         */
+        ProgressOut: {
+            /** Done */
+            done: number;
+            /** Total */
+            total: number;
+        };
         /** ProofLineOut */
         ProofLineOut: {
             /** Text */
@@ -906,6 +1247,15 @@ export interface components {
             /** Cited Facet Ids */
             cited_facet_ids?: string[];
         };
+        /**
+         * Reach
+         * @description 一样东西谁能看见。
+         *
+         *     只有两档，且默认是窄的那一档。档位多了就没人认真选，
+         *     而"发出去"这件事不该有一个随手滑过去的中间态。
+         * @enum {string}
+         */
+        Reach: "ours" | "outside";
         /** RelaxationOut */
         RelaxationOut: {
             /** Field Name */
@@ -926,6 +1276,20 @@ export interface components {
         ReviseIntentRequest: {
             content: components["schemas"]["IntentContentIn"];
         };
+        /**
+         * ReviseItemRequest
+         * @description 推进、指派、改可见范围。
+         *
+         *     三样都可选，且"没给"与"给了 null"是两件事：`assignee_id: null` 是
+         *     把活放回去，不给这个字段才是不动它。区分靠 `model_fields_set`。
+         */
+        ReviseItemRequest: {
+            /** State */
+            state?: string | null;
+            /** Assignee Id */
+            assignee_id?: string | null;
+            reach?: components["schemas"]["Reach"] | null;
+        };
         /** SeatIn */
         SeatIn: {
             /** Role */
@@ -943,6 +1307,39 @@ export interface components {
             filled: number;
             /** Gap */
             gap: number;
+        };
+        /**
+         * SpaceOut
+         * @description 一屏。
+         *
+         *     四个分组对着验收标准的四句话：要做什么（`cards`）、谁负责什么（卡片上的
+         *     负责人）、卡在哪（`stuck`）、还有哪些决定没关（`open_gates`）。
+         *     `drafts` 是第五样——助手写了、等真人过目的，它单独一栏，因为它还不算数。
+         *
+         *     `open_gates` 与 `stuck` 是 `cards` 的子集，不是另一批东西。照搬领域视图
+         *     的分组，不做层间语义翻译。
+         */
+        SpaceOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Agent Enabled */
+            agent_enabled: boolean;
+            /** Cards */
+            cards: components["schemas"]["ItemOut"][];
+            /** Open Gates */
+            open_gates: components["schemas"]["ItemOut"][];
+            /** Stuck */
+            stuck: components["schemas"]["ItemOut"][];
+            /** Drafts */
+            drafts: components["schemas"]["ItemOut"][];
+            progress: components["schemas"]["ProgressOut"];
+            /** Summary */
+            summary: string;
         };
         /** StarterOut */
         StarterOut: {
@@ -969,6 +1366,21 @@ export interface components {
             note: string;
             /** Hints */
             hints: components["schemas"]["HintOut"][];
+        };
+        /**
+         * SuggestionOut
+         * @description 一条建议。
+         *
+         *     每条都是独立的一条，不是一段话里的一句——混在一段话里，用户要么
+         *     全接受要么全拒绝，"每条都带一个「不用了」"就无从谈起（07 原则四）。
+         */
+        SuggestionOut: {
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /** Grounded In */
+            grounded_in: string[];
         };
         /** TeamMemberOut */
         TeamMemberOut: {
@@ -1022,6 +1434,11 @@ export interface components {
              * Format: date-time
              */
             deadline: string;
+        };
+        /** ToggleAgentRequest */
+        ToggleAgentRequest: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -1847,6 +2264,282 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GateStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_item_kinds_api_item_kinds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemKindOut"][];
+                };
+            };
+        };
+    };
+    get_space_api_spaces__space_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_item_api_spaces__space_id__items_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revise_item_api_spaces__space_id__items__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                item_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviseItemRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_item_api_spaces__space_id__items__item_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                item_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    toggle_agent_api_spaces__space_id__agent_toggle_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToggleAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_suggestions_api_spaces__space_id__suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_suggestion_api_spaces__space_id__suggestions_accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptSuggestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemOut"];
                 };
             };
             /** @description Validation Error */

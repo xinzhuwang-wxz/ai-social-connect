@@ -316,6 +316,33 @@ class Clearing:
 
     # --- 解一条 ---
 
+    def resolve_again(
+        self,
+        intent: IntentSignal,
+        *,
+        excluding: frozenset[UUID],
+        now: datetime,
+    ) -> int:
+        """有人拒绝之后立刻重解，把拒绝的人排除掉。
+
+        它不等下一个窗口——**一次拒绝让发起人干等六小时，而赶截止期的人
+        等不起**，那正是他最需要系统帮忙的时刻。这不违反"按窗口清算"：
+        窗口解决的是争用，而这里的争用已经发生过了，重解只是在剩下的人里
+        重新分配一次。
+
+        排除是**这一次**的，不写进任何长期状态：他这次不方便，
+        不代表下次也不。
+        """
+        unit = self._board.unit_for(intent.action_kind)
+        return self._clear_one(
+            intent,
+            unit,
+            cleared_at=now,
+            now=now,
+            exposure=Counter(),
+            excluding=excluding,
+        )
+
     def _clear_one(
         self,
         intent: IntentSignal,
@@ -324,22 +351,26 @@ class Clearing:
         cleared_at: datetime,
         now: datetime,
         exposure: Counter[UUID],
+        excluding: frozenset[UUID] = frozenset(),
     ) -> int:
         """回应一条需求。返回产出的提案数（0 表示凑不出来）。
 
         稳定性未通过的分区**不得成为提案**——这是不可越过的三条之一。
         所以过滤发生在写库之前，不是写完再标记。
         """
-        shortlist = Funnel(self._conn, self._campus, retriever=self._retriever).shortlist(
-            intent, now=now
-        )
+        shortlist = Funnel(
+            self._conn, self._campus, retriever=self._retriever
+        ).shortlist(intent, now=now, exclude=excluding)
         if not shortlist.candidates:
             return 0
 
         # 这一轮已经被提够了的人不再进池。逐条求解看不见这件事，
         # 于是先提交的人会把稀缺角色全占走。
-        taken = frozenset(
-            pid for pid, n in exposure.items() if n >= MAX_PROPOSALS_PER_ROUND
+        taken = (
+            frozenset(
+                pid for pid, n in exposure.items() if n >= MAX_PROPOSALS_PER_ROUND
+            )
+            | excluding
         )
         requirement = self._requirement(intent, unit, excluded=taken)
         candidates = tuple(

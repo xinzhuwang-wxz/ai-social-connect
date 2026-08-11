@@ -1560,6 +1560,628 @@
         }
       }
     },
+    "/api/item-kinds": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "List Item Kinds",
+        "description": "能往空间里放哪几类东西。\n\n新增一种条目时这里自动多一项，前端不改代码——和首屏的场景引子\n是同一个扩展点思路。",
+        "operationId": "list_item_kinds_api_item_kinds_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ItemKindOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Item Kinds Api Item Kinds Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Get Space",
+        "description": "共域一屏。\n\n新空间返回的是一个可用的空态——`summary` 说\"还没有要做的事\"，\n不是错误也不是一片空白。一屏能看见的四件事都在分组里。",
+        "operationId": "get_space_api_spaces__space_id__get",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/items": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Add Item",
+        "description": "往画布上放一条东西。\n\n放的人是请求头里的那个人。请求体里写谁都不算——`created_by` 由这一层\n填，不接受任何外部输入。",
+        "operationId": "add_item_api_spaces__space_id__items_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/items/{item_id}": {
+      "patch": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Revise Item",
+        "description": "推进一步、换个负责人，或者改谁能看见。\n\n要真人点头的那一类走不到终态：那条路只有 `:confirm`。留一条 `advance`\n的后门，\"助手关不掉决策门\"就白写了——而后门在 HTTP 上比在库里更好找。",
+        "operationId": "revise_item_api_spaces__space_id__items__item_id__patch",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviseItemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/items/{item_id}:confirm": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Confirm Item",
+        "description": "点头。\n\n点头的是请求头里的那个人，这个端点**没有请求体**——身份可以由请求体\n决定的话，\"谁点的头\"就成了一句可以随便填的话。\n\n全体点齐才算关上。少一个人就关上等于\"没读的人默认被代表\"，\n那正是群聊做错的事。",
+        "operationId": "confirm_item_api_spaces__space_id__items__item_id__confirm_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/agent:toggle": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Toggle Agent",
+        "description": "开关助手。\n\n关掉之后返回的仍然是完整的一屏——这正是要给前端看的：**人工那几栏\n一条都没少**，只是\"等你过目\"那一栏空了。草稿的行还留在库里，\n重新打开它们原样回来。\n\n这里不动策略纪元：令牌活不过一个请求，没有需要作废的旧令牌。",
+        "operationId": "toggle_agent_api_spaces__space_id__agent_toggle_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleAgentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/suggestions": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "List Suggestions",
+        "description": "助手看了一眼空间，给几条下一步。\n\n**助手关着的时候返回空列表，HTTP 200。** 关掉助手是一个正常状态不是\n一次故障——回 4xx 会让界面弹一个红框，等于把用户自己的选择显示成\n出了问题。模型说不出话（服务挂了、磁带没命中）也一样：闭嘴，不报错。\n\n建议不落库。刷一次屏就往画布上写一条，那一栏很快就成了垃圾堆——\n真人按下\"采纳\"它才进画布。",
+        "operationId": "list_suggestions_api_spaces__space_id__suggestions_get",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SuggestionOut"
+                  },
+                  "title": "Response List Suggestions Api Spaces  Space Id  Suggestions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/suggestions:accept": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Accept Suggestion",
+        "description": "采纳一条建议：把它放进画布，并记下是谁认的。\n\n逐条采纳，没有一键全收——一键全收和让助手自己写进去没有区别，\n中间那个人只是按了一下。落进来的条目**两个署名都留着**：\n`drafted_by_agent` 记它是助手写的，`accepted_by` 记是谁认的。",
+        "operationId": "accept_suggestion_api_spaces__space_id__suggestions_accept_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptSuggestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -1588,6 +2210,35 @@
   },
   "components": {
     "schemas": {
+      "AcceptSuggestionRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "grounded_in": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grounded In",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title"
+        ],
+        "title": "AcceptSuggestionRequest",
+        "description": "采纳一条建议。\n\n带回 `grounded_in` 是因为建议本身不落库——助手每刷新一次屏幕就往画布上\n写一条，那一栏很快就成了垃圾堆。代价是这段文字由客户端带回来，\n但**谁采纳的**记在 `accepted_by` 上，责任仍然落在按下按钮的那个人身上。"
+      },
       "ActionKindOut": {
         "properties": {
           "key": {
@@ -1629,6 +2280,67 @@
           "matching_window_seconds"
         ],
         "title": "ActionKindOut"
+      },
+      "AddItemRequest": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "extras": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Extras",
+            "default": {}
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title"
+        ],
+        "title": "AddItemRequest"
       },
       "BlockedOut": {
         "properties": {
@@ -2059,6 +2771,11 @@
               }
             ],
             "title": "Space Id"
+          },
+          "reformed_teams": {
+            "type": "integer",
+            "title": "Reformed Teams",
+            "default": 0
           }
         },
         "type": "object",
@@ -2423,6 +3140,230 @@
         ],
         "title": "IntentOut"
       },
+      "ItemKindOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "states": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "States"
+          },
+          "done_states": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Done States"
+          },
+          "counts_toward_progress": {
+            "type": "boolean",
+            "title": "Counts Toward Progress"
+          },
+          "needs_human_decision": {
+            "type": "boolean",
+            "title": "Needs Human Decision"
+          },
+          "required_extras": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Extras"
+          },
+          "agent_may_draft": {
+            "type": "boolean",
+            "title": "Agent May Draft"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "states",
+          "done_states",
+          "counts_toward_progress",
+          "needs_human_decision",
+          "required_extras",
+          "agent_may_draft"
+        ],
+        "title": "ItemKindOut",
+        "description": "一种条目的声明。前端据此生成\"放一条东西\"的选项与表单。"
+      },
+      "ItemOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "space_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Space Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "created_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Created By"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "drafted_by_agent": {
+            "type": "boolean",
+            "title": "Drafted By Agent"
+          },
+          "accepted_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accepted By"
+          },
+          "awaiting_a_person": {
+            "type": "boolean",
+            "title": "Awaiting A Person"
+          },
+          "deciders": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Deciders",
+            "default": []
+          },
+          "confirmed_by": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Confirmed By",
+            "default": []
+          },
+          "reach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reach"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "notice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "space_id",
+          "kind",
+          "label",
+          "title",
+          "state",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "drafted_by_agent",
+          "awaiting_a_person"
+        ],
+        "title": "ItemOut",
+        "description": "画布上的一条东西。\n\n`extras` 不原样透出：它在库里是开放的 JSON，透出去前端拿到的就是一个\n`additionalProperties: true`，也就是回到手写类型。四个有约定含义的键在\n这里显式成型；将来某种条目带了新键，这里补一行——契约本来就该是显式的。"
+      },
       "NextStepOut": {
         "properties": {
           "kind": {
@@ -2553,6 +3494,25 @@
         "title": "PreviewOut",
         "description": "「别人眼中的我」。\n\n这一屏让\"最小披露\"从一句承诺变成用户可以自己检查的东西。"
       },
+      "ProgressOut": {
+        "properties": {
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "total"
+        ],
+        "title": "ProgressOut",
+        "description": "做完了多少。**件数，不是百分比**——这个产品不做总分（07 §6）。"
+      },
       "ProofLineOut": {
         "properties": {
           "text": {
@@ -2591,6 +3551,15 @@
         },
         "type": "object",
         "title": "PutEnvelopeRequest"
+      },
+      "Reach": {
+        "type": "string",
+        "enum": [
+          "ours",
+          "outside"
+        ],
+        "title": "Reach",
+        "description": "一样东西谁能看见。\n\n只有两档，且默认是窄的那一档。档位多了就没人认真选，\n而\"发出去\"这件事不该有一个随手滑过去的中间态。"
       },
       "RelaxationOut": {
         "properties": {
@@ -2636,6 +3605,46 @@
           "content"
         ],
         "title": "ReviseIntentRequest"
+      },
+      "ReviseItemRequest": {
+        "properties": {
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "assignee_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignee Id"
+          },
+          "reach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reach"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "ReviseItemRequest",
+        "description": "推进、指派、改可见范围。\n\n三样都可选，且\"没给\"与\"给了 null\"是两件事：`assignee_id: null` 是\n把活放回去，不给这个字段才是不动它。区分靠 `model_fields_set`。"
       },
       "SeatIn": {
         "properties": {
@@ -2686,6 +3695,72 @@
           "gap"
         ],
         "title": "SeatOut"
+      },
+      "SpaceOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "agent_enabled": {
+            "type": "boolean",
+            "title": "Agent Enabled"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/ItemOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          },
+          "open_gates": {
+            "items": {
+              "$ref": "#/components/schemas/ItemOut"
+            },
+            "type": "array",
+            "title": "Open Gates"
+          },
+          "stuck": {
+            "items": {
+              "$ref": "#/components/schemas/ItemOut"
+            },
+            "type": "array",
+            "title": "Stuck"
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/ItemOut"
+            },
+            "type": "array",
+            "title": "Drafts"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ProgressOut"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "agent_enabled",
+          "cards",
+          "open_gates",
+          "stuck",
+          "drafts",
+          "progress",
+          "summary"
+        ],
+        "title": "SpaceOut",
+        "description": "一屏。\n\n四个分组对着验收标准的四句话：要做什么（`cards`）、谁负责什么（卡片上的\n负责人）、卡在哪（`stuck`）、还有哪些决定没关（`open_gates`）。\n`drafts` 是第五样——助手写了、等真人过目的，它单独一栏，因为它还不算数。\n\n`open_gates` 与 `stuck` 是 `cards` 的子集，不是另一批东西。照搬领域视图\n的分组，不做层间语义翻译。"
       },
       "StarterOut": {
         "properties": {
@@ -2744,6 +3819,33 @@
           "hints"
         ],
         "title": "StashHintOut"
+      },
+      "SuggestionOut": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "grounded_in": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Grounded In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "title",
+          "grounded_in"
+        ],
+        "title": "SuggestionOut",
+        "description": "一条建议。\n\n每条都是独立的一条，不是一段话里的一句——混在一段话里，用户要么\n全接受要么全拒绝，\"每条都带一个「不用了」\"就无从谈起（07 原则四）。"
       },
       "TeamMemberOut": {
         "properties": {
@@ -2864,6 +3966,19 @@
           "deadline"
         ],
         "title": "TimeWindowOut"
+      },
+      "ToggleAgentRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "ToggleAgentRequest"
       },
       "ValidationError": {
         "properties": {
