@@ -1,14 +1,60 @@
-# 交接状态 · 2026-08-11
+# 交接状态 · 2026-08-12
 
-用于冷启动恢复工作。**先读这一页，再读 [`README.md`](./README.md)。**
+用于冷启动恢复工作。**先读这一页，再读 [`CLAUDE.md`](./CLAUDE.md)。**
 
 ---
 
 ## 一句话状态
 
-产品方向、系统边界、开源选型、PRD 与 16 个可执行 issue 全部就绪，**尚未写任何代码**。
+**M0–M4 全部完成，17 个 issue 全关。** `docker compose up` 起来就是一个能用的
+产品；主链路（说一句话 → 拿到小队 → 全员确认 → 共域诞生 → 留下记录 →
+下次被引用）在真栈上验证过。
+
+| | 数量 |
+|---|---|
+| 后端测试 | 388 |
+| 前端测试 | 95 |
+| API 路径 | 41 |
+| 数据表 | 20（全部 RLS + FORCE） |
+| 迁移 | 12 |
+| ADR | 5 |
+
+实测：两万人漏斗 16ms · 语义召回七倍富集 · 求解 40 候选 6 组中位 0.082s ·
+稳定性 5.4ms · 播种 1.3s。
 
 ---
+
+## 还没做完的
+
+- **UI-only autoresearch 没跑。** 量表 `pnpm e2e:persona-walkthrough` 建好了，
+  但它只覆盖五项指标里机器能判的三项（`blocked_steps` / `term_leaks` /
+  `missing_states`）；`confusion_hits` 与 `abandon_points` 要浏览器里的 agent
+  走一遍
+- 表结构缺口（子智能体逐条报过，都写在对应 issue 的关闭评论里）：
+  关系切面需多人共同确认、切面有效期、`contested` 状态、完整导出与
+  「删除全部数据」
+- `next_steps` 里「转给社团」没有对应端点
+
+---
+
+## 这一轮抓到的静默 bug，值得记住的模式
+
+它们的共同点是：**测试全绿，日志正常，而用户那一屏永远是空的。**
+
+1. **清算从不给成员开待答复** —— 提案产出了，但没人能点「我加入」。
+   两层各自的测试都绿，没有一条跨过它们
+2. **「给定种子完全可复现」一直是假的** —— 课表用了内置 `hash()`，
+   而可复现性测试在同一个进程里比较，永远相等
+3. **「缺个会剪辑的」抽成 `会剪辑`** —— 词表里只有 `剪辑`，这条需求
+   永远匹配不到人，不报错
+4. **兜底截止期拿窗口对齐基准当"现在"** —— 落在过去，提案一生成就过期
+5. **没有 `.dockerignore`** —— 宿主 `.venv` 与 `__pycache__` 被 COPY 进镜像
+
+第 1 条只有端到端走一遍才能发现。这是**分层测试的系统性盲区**：
+每一层都测了自己，没人测两层之间那根线。
+
+---
+
 
 ## 已完成
 
@@ -24,18 +70,30 @@
 | 产品语言与界面原则 | [`docs/07-产品语言与界面原则.md`](./docs/07-产品语言与界面原则.md) |
 | 前端规格（每屏数据契约） | [`docs/08-前端规格.md`](./docs/08-前端规格.md) |
 | PRD（163 条用户故事） | [`docs/prd/01-共域平台.md`](./docs/prd/01-共域平台.md) |
-| 16 个 tracer bullet issue | GitHub `xinzhuwang-wxz/ai-social-connect` |
+| 16 个 tracer bullet issue | GitHub `xinzhuwang-wxz/ai-social-connect`（全部关闭） |
+| 开局必读（红线、命令、派子智能体的边界） | [`CLAUDE.md`](./CLAUDE.md) |
+| 后端全部实现 | `apps/api/src/cofield/` |
+| 前端六屏 | `apps/web/app/`、`apps/web/components/` |
+| 一条命令起全套 | `docker-compose.yml` + 两个 Dockerfile |
+| 播种命令 | `pnpm seed`（两万人 1.3 秒） |
+| CI 三个 job | `.github/workflows/ci.yml` |
 
 ---
 
 ## 恢复后的第一步
 
-先读 [`docs/GOAL.md`](./docs/GOAL.md)——交付物、里程碑与完成的定义都在那里。
+先读 [`CLAUDE.md`](./CLAUDE.md)，再读 [`docs/GOAL.md`](./docs/GOAL.md) 的
+「完成的定义」三节。
 
-**开工的第一个 commit 必须是 #1。**
+**下一件事是跑 UI-only autoresearch**（配置见 GOAL.md 末节）。八个 persona
+只通过界面走全链路，任一步卡住都算未通过。这一关**必须能失败**——
+如果它从来没判过不合格，说明量表设松了。
 
-`Clock` 端口和 `is_synthetic` 现在各是一行接口和一个字段；等领域层写完再补就是跨几十个文件的重构，而且几乎一定会漏掉几处 `now()`。
-
+```
+docker compose up          # 起来就有两万人的校园
+pnpm check                 # 测试 + 类型 + 领域纯度 + 界面词汇 + 契约无漂移
+pnpm e2e:persona-walkthrough
+```
 ```
 gh issue view 1
 ```
