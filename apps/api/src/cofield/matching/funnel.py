@@ -1,33 +1,72 @@
 """撮合漏斗的前两段：硬过滤与召回。
 
 ```
-两万人 ──权限+硬约束(SQL)──▶ 数百 ──混合召回──▶ 数十 ──▶ 求解（#6）
+两万人 ──权限+硬约束(SQL)──▶ 数千 ──语义召回──▶ 数十 ──▶ 求解（#6）
 ```
 
-两条设计不能动：
+三条设计不能动：
 
 **硬约束是过滤器，不参与打分。** 任何软分都不能抵消一条硬约束冲突。
 时间凑不上就是凑不上，不能因为"技能特别合适"就放行。
 
 **权限过滤必须前置。** 先召回后过滤会造成侧信道泄露——攻击者能从反复
 查询的结果数量与时延差异反推隐藏字段。而且高选择性下 post-filter 的
-召回会崩：两万人过滤到几百是 1.5% 选择性，这时候对几百个向量做精确
-比较成本微不足道，正是 pgvector 最舒服的场景。
+召回会崩：两万人过滤到几千是个位数百分比的选择性，这时候对幸存者做精确
+向量比较成本微不足道，正是 pgvector 最舒服的场景。
+
+**语义降级不能拖垮整条链路。** 嵌入服务挂了，用户仍然要能拿到候选——
+少了长尾表达那一路，但不是白屏。降级发生了就写进 trace，让它可观测。
+
+## 时间为什么不在这一段过滤
+
+"我和他都周四有空"不等于"我们四个人都有连着两段"。整组共同空闲是**群体
+属性**，只有拿到具体分组才算得出来——这是超图那件事的直接后果。实测也
+支持这个分工：任意一段重合几乎总能凑上（四人组 300 次里 285+ 次），连续
+两段只有约一半。放在这里过滤形同虚设，放在求解器里才咬得动。
+
+所以这一段里时间只作**排序信号**，真正的时间硬约束由求解器施加。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
+from enum import StrEnum
 from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy import Connection
+from sqlalchemy.sql import Select
 
 from cofield.adapters.persistence.schema import principals
 from cofield.domain.model.intent import IntentSignal
+from cofield.domain.ports.embedder import EmbeddingUnavailable
+from cofield.matching.semantic import SemanticRetriever
 
 WEEK_SLOTS = 21
+
+#: 语义排序之后交给结构化排序的人数。比最终 40 大一个量级——
+#: 语义负责**筛掉明显不搭的**，最终取舍留给能解释每一条依据的排序与求解。
+SEMANTIC_KEEP = 200
+
+#: 没有语义那一路时，从硬过滤结果里取多少个。这是个**任意的截断**，
+#: 也正是纯结构化召回的局限：它没有任何理由认为前 500 个比后 500 个更合适。
+STRUCTURED_CAP = 500
+
+
+class RecallMode(StrEnum):
+    """这次召回是怎么完成的。
+
+    它要出现在界面上——"五态齐全"里的降级态，靠的就是它。
+    用户有权知道这次匹配是不是打了折。
+    """
+
+    #: 语义参与了排序。
+    SEMANTIC = "semantic"
+    #: 嵌入服务不可用，退回纯结构化。长尾表达这次没被考虑。
+    DEGRADED = "degraded"
+    #: 本来就没配语义（或没人写过自述），不算故障。
+    STRUCTURED = "structured"
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,11 +77,14 @@ class Candidate:
     availability: str
     zone: str | None
     is_synthetic: bool
+    #: 语义命中的原话。**成局证明引用它，不引用相似度**——
+    #: "他自己写的『文风比较冲』"是用户能判断的理由，0.71 不是。
+    matched_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class FunnelTrace:
-    """每一段剩多少。
+    """每一段剩多少，以及这次是怎么召回的。
 
     它不是调试输出——「凑不出队」时要靠它告诉用户是**哪一段**把人筛没了，
     以及放宽哪一项能多出多少人。
@@ -52,6 +94,7 @@ class FunnelTrace:
     after_hard_filter: int
     after_recall: int
     blocked_by: tuple[str, ...] = ()
+    recall_mode: RecallMode = RecallMode.STRUCTURED
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,9 +118,16 @@ def contiguous_common_slots(masks: list[str], *, run: int = 2) -> int:
 
 
 class Funnel:
-    def __init__(self, conn: Connection, campus_id: str) -> None:
+    def __init__(
+        self,
+        conn: Connection,
+        campus_id: str,
+        *,
+        retriever: SemanticRetriever | None = None,
+    ) -> None:
         self._conn = conn
         self._campus = campus_id
+        self._retriever = retriever
 
     def shortlist(
         self,
@@ -85,65 +135,175 @@ class Funnel:
         *,
         now: datetime,
         exclude: frozenset[UUID] = frozenset(),
-        limit: int = 500,
+        keep: int = 40,
     ) -> Shortlist:
         """从全校筛到几十个候选，并记录每一段的量级。"""
         population = self._conn.execute(
             sa.select(sa.func.count()).select_from(principals)
         ).scalar_one()
 
-        hard = self._hard_filter(intent, exclude=exclude, limit=limit)
-        blocked: list[str] = []
-        if not hard:
-            blocked = self._diagnose(intent, exclude=exclude)
+        survivors = self._hard_filter_query(intent, exclude)
+        after_hard = self._conn.execute(
+            sa.select(sa.func.count()).select_from(survivors.subquery())
+        ).scalar_one()
 
-        recalled = self._recall(intent, hard)
+        blocked: list[str] = []
+        if not after_hard:
+            blocked = self._diagnose(intent, exclude=exclude)
+            return Shortlist(
+                candidates=(),
+                trace=FunnelTrace(
+                    population=population,
+                    after_hard_filter=0,
+                    after_recall=0,
+                    blocked_by=tuple(blocked),
+                    recall_mode=RecallMode.STRUCTURED,
+                ),
+            )
+
+        pool, order, mode = self._recall_pool(intent, survivors)
+        recalled = self._rank(intent, pool, order, keep=keep)
 
         return Shortlist(
             candidates=tuple(recalled),
             trace=FunnelTrace(
                 population=population,
-                after_hard_filter=len(hard),
+                after_hard_filter=after_hard,
                 after_recall=len(recalled),
-                blocked_by=tuple(blocked),
+                recall_mode=mode,
             ),
         )
 
     # --- 第一段：硬约束 SQL 过滤 ---
 
-    def _base_query(self, intent: IntentSignal, exclude: frozenset[UUID]):  # type: ignore[no-untyped-def]
-        stmt = sa.select(
-            principals.c.id,
-            principals.c.display_name,
-            principals.c.skills,
-            principals.c.availability,
-            principals.c.zone,
-            principals.c.is_synthetic,
-        ).where(principals.c.id != intent.principal_id)
-
+    def _id_query(
+        self, intent: IntentSignal, exclude: frozenset[UUID]
+    ) -> Select[tuple[UUID]]:
+        stmt = sa.select(principals.c.id).where(
+            principals.c.id != intent.principal_id
+        )
         if exclude:
             stmt = stmt.where(principals.c.id.not_in(exclude))
         return stmt
 
-    def _hard_filter(
-        self, intent: IntentSignal, *, exclude: frozenset[UUID], limit: int
-    ) -> list[Candidate]:
-        stmt = self._base_query(intent, exclude)
+    def _hard_filter_query(
+        self,
+        intent: IntentSignal,
+        exclude: frozenset[UUID] = frozenset(),
+        *,
+        skip: str | None = None,
+    ) -> Select[tuple[UUID]]:
+        """带上全部硬约束的 id 查询。
+
+        `skip` 用于阻塞诊断与放宽估算——卸掉某一条看还剩多少人。
+        它不是给正常路径用的，正常路径一条都不能卸。
+        """
+        stmt = self._id_query(intent, exclude)
         content = intent.content
 
         # 必要角色：候选至少覆盖一个缺口，否则他来了也补不上洞。
-        if content.needs:
+        if content.needs and skip != "needs":
             stmt = stmt.where(principals.c.skills.overlap(list(content.needs)))
 
         # 校区：跨校区的活动多数人不会去。
-        if content.location_scope:
+        if content.location_scope and skip != "location_scope":
             zone = _zone_of(content.location_scope)
             if zone:
                 stmt = stmt.where(
                     sa.or_(principals.c.zone == zone, principals.c.zone.is_(None))
                 )
 
-        rows = self._conn.execute(stmt.limit(limit)).all()
+        return stmt
+
+    def _diagnose(self, intent: IntentSignal, *, exclude: frozenset[UUID]) -> list[str]:
+        """一条都没剩下时，逐个卸掉约束看是哪条把人筛没的。
+
+        这是「凑不出队」那一屏的数据来源——要能说出放宽哪一项多出多少人，
+        而不是只说"没找到"。
+        """
+        blocked: list[str] = []
+        content = intent.content
+
+        for field_name, present in (
+            ("needs", bool(content.needs)),
+            ("location_scope", bool(content.location_scope)),
+        ):
+            if not present:
+                continue
+            relaxed = self._hard_filter_query(intent, exclude, skip=field_name)
+            if self._conn.execute(relaxed.limit(1)).first():
+                blocked.append(field_name)
+
+        return blocked
+
+    def relaxation_gain(self, intent: IntentSignal, field_name: str) -> int:
+        """放宽某一项能多出多少候选。阻塞证明直接用这个数字。"""
+
+        def count(stmt: Select[tuple[UUID]]) -> int:
+            return self._conn.execute(
+                sa.select(sa.func.count()).select_from(stmt.subquery())
+            ).scalar_one()
+
+        widened = count(self._hard_filter_query(intent, skip=field_name))
+        current = count(self._hard_filter_query(intent))
+        return max(0, widened - current)
+
+    # --- 第二段：召回 ---
+
+    def _recall_pool(
+        self, intent: IntentSignal, survivors: Select[tuple[UUID]]
+    ) -> tuple[list[Candidate], dict[UUID, int], RecallMode]:
+        """从幸存者里取一批送去排序，并说清这批是怎么来的。
+
+        走语义时取的是**语义上最贴近原话**的一批，并把名次一并带出来——
+        名次在池子内部继续区分远近。只带"命中了"这个布尔位的话，语义就
+        只在选池那一步起作用，池子里两百个人会变得无差别。
+
+        没有语义时取的是 SQL 碰巧先返回的一批。这是个**任意截断**，
+        它没有任何理由认为前五百个比后五百个更合适——这正是纯结构化召回
+        的局限，也是语义那一路存在的理由。
+        """
+        if self._retriever is not None:
+            try:
+                hits = self._retriever.rank(
+                    intent.raw_expression, survivors, keep=SEMANTIC_KEEP
+                )
+            except EmbeddingUnavailable:
+                # 语义是增强不是前提。降级但不中断，并让降级可见。
+                return (
+                    self._fetch(survivors.limit(STRUCTURED_CAP)),
+                    {},
+                    RecallMode.DEGRADED,
+                )
+            if hits:
+                texts = {h.subject_id: h.matched_text for h in hits}
+                order = {h.subject_id: i for i, h in enumerate(hits)}
+                pool = [
+                    replace(c, matched_text=texts[c.principal_id])
+                    for c in self._fetch_by_id(tuple(texts))
+                ]
+                return pool, order, RecallMode.SEMANTIC
+            # 没有人写过自述，或这批人一个都没进索引。不是故障。
+
+        return self._fetch(survivors.limit(STRUCTURED_CAP)), {}, RecallMode.STRUCTURED
+
+    def _fetch(self, ids: Select[tuple[UUID]]) -> list[Candidate]:
+        return self._rows_for(principals.c.id.in_(ids))
+
+    def _fetch_by_id(self, ids: tuple[UUID, ...]) -> list[Candidate]:
+        return self._rows_for(principals.c.id.in_(ids))
+
+    def _rows_for(self, predicate: sa.ColumnElement[bool]) -> list[Candidate]:
+        rows = self._conn.execute(
+            sa.select(
+                principals.c.id,
+                principals.c.display_name,
+                principals.c.skills,
+                principals.c.availability,
+                principals.c.zone,
+                principals.c.is_synthetic,
+            ).where(predicate)
+        ).all()
         return [
             Candidate(
                 principal_id=r.id,
@@ -156,86 +316,38 @@ class Funnel:
             for r in rows
         ]
 
-    def _diagnose(self, intent: IntentSignal, *, exclude: frozenset[UUID]) -> list[str]:
-        """一条都没剩下时，逐个卸掉约束看是哪条把人筛没的。
-
-        这是「凑不出队」那一屏的数据来源——要能说出放宽哪一项多出多少人，
-        而不是只说"没找到"。
-        """
-        blocked: list[str] = []
-        content = intent.content
-
-        if content.needs:
-            without_skill = self._conn.execute(
-                self._base_query(intent, exclude).limit(1)
-            ).all()
-            if without_skill:
-                blocked.append("needs")
-
-        if content.location_scope:
-            stmt = self._base_query(intent, exclude)
-            if content.needs:
-                stmt = stmt.where(principals.c.skills.overlap(list(content.needs)))
-            if self._conn.execute(stmt.limit(1)).all():
-                blocked.append("location_scope")
-
-        return blocked
-
-    def relaxation_gain(self, intent: IntentSignal, field_name: str) -> int:
-        """放宽某一项能多出多少候选。阻塞证明直接用这个数字。"""
-        content = intent.content
-        stmt = self._base_query(intent, frozenset())
-
-        if field_name != "needs" and content.needs:
-            stmt = stmt.where(principals.c.skills.overlap(list(content.needs)))
-        if field_name != "location_scope" and content.location_scope:
-            zone = _zone_of(content.location_scope)
-            if zone:
-                stmt = stmt.where(
-                    sa.or_(principals.c.zone == zone, principals.c.zone.is_(None))
-                )
-
-        widened = self._conn.execute(
-            sa.select(sa.func.count()).select_from(stmt.subquery())
-        ).scalar_one()
-        current = self._conn.execute(
-            sa.select(sa.func.count()).select_from(
-                self._hard_filter_query(intent).subquery()
-            )
-        ).scalar_one()
-        return max(0, widened - current)
-
-    def _hard_filter_query(self, intent: IntentSignal):  # type: ignore[no-untyped-def]
-        stmt = self._base_query(intent, frozenset())
-        content = intent.content
-        if content.needs:
-            stmt = stmt.where(principals.c.skills.overlap(list(content.needs)))
-        if content.location_scope:
-            zone = _zone_of(content.location_scope)
-            if zone:
-                stmt = stmt.where(
-                    sa.or_(principals.c.zone == zone, principals.c.zone.is_(None))
-                )
-        return stmt
-
-    # --- 第二段：召回 ---
-
-    def _recall(
-        self, intent: IntentSignal, pool: list[Candidate], *, keep: int = 40
+    def _rank(
+        self,
+        intent: IntentSignal,
+        pool: list[Candidate],
+        order: dict[UUID, int],
+        *,
+        keep: int,
     ) -> list[Candidate]:
         """从数百缩到数十。
 
-        排序信号只有两个，都可解释：补上了几个缺口，以及时间够不够宽裕。
-        **这里不做任何不可解释的打分**——真正的取舍留给求解器，
+        排序信号只有三个，**每一个都能写成一句给用户看的话**：
+
+        - 补上了几个缺口 —— "他能补上缺的剪辑"
+        - 语义有多贴近 —— "他自己写的『文风比较冲』"
+        - 时间够不够宽裕 —— "你们有两段连着的共同空闲"
+
+        缺口排在语义前面，因为缺口是用户**说出来的要求**，语义是**说不全的
+        偏好**；要求没满足时，风格再合也没用。真正的取舍留给求解器，
         它的每一条依据都要能写进成局证明。
+
+        名次用的是语义排序里的位置，不是相似度本身——浮点数会让同一份数据
+        在不同机器上排出不同结果，而仿真结论必须能被重跑验证。
         """
         needs = set(intent.content.needs)
         mine = intent_owner_availability(intent)
+        missed = len(order) + 1
 
-        def rank(candidate: Candidate) -> tuple[int, int]:
+        def rank(candidate: Candidate) -> tuple[int, int, int]:
             covered = len(needs & set(candidate.skills))
+            closeness = order.get(candidate.principal_id, missed)
             slack = contiguous_common_slots([mine, candidate.availability])
-            return (-covered, -slack)
+            return (-covered, closeness, -slack)
 
         return sorted(pool, key=rank)[:keep]
 

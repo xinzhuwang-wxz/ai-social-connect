@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import ARRAY as PgArray
 
 metadata = sa.MetaData()
@@ -49,6 +50,10 @@ principals = sa.Table(
     #: 21 位周课表掩码（7 天 × 上午/下午/晚上），1 表示有空。
     #: 整组共同空闲 = 按位与。真正咬人的约束是"连续两段"而不是"任意一段"。
     sa.Column("availability", sa.Text),
+    #: 自己写的一段话。它**故意不被结构化**——"想找个写朋克风格文案的"
+    #: 这类需求没有字段接得住，只能靠这段原话进语义索引。
+    #: 它是可授权字段（见 consent.GRANTABLE_FIELDS），不是默认公开。
+    sa.Column("self_intro", sa.Text),
     sa.Index("ix_principals_campus", "campus_id"),
     sa.Index("ix_principals_campus_synthetic", "campus_id", "is_synthetic"),
     sa.Index("ix_principals_skills", "skills", postgresql_using="gin"),
@@ -167,6 +172,32 @@ consent_records = sa.Table(
     sa.Index("ix_consent_principal", "campus_id", "pii_principal_id"),
 )
 
+#: 语义索引的维度。与 Embedder 端口声明的维度必须一致。
+EMBEDDING_DIMENSIONS = 384
+
+#: 语义召回索引。
+#:
+#: 只索引**已授权用于匹配**的内容——未授权的原话不进这张表，
+#: 撤销授权即删行。向量是派生物，删库能从权威事实重建。
+#:
+#: 它承载的是 schema 装不下的那部分表达：「想找个写朋克风格文案的」
+#: 没有任何结构化字段能装，但原话里有。
+semantic_index = sa.Table(
+    "semantic_index",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    #: 被索引对象的类型与主键。目前是 principal 的自述与 intent 的原话。
+    sa.Column("subject_kind", sa.Text, nullable=False),
+    sa.Column("subject_id", sa.Uuid, nullable=False),
+    sa.Column("text", sa.Text, nullable=False),
+    sa.Column("embedding", Vector(EMBEDDING_DIMENSIONS), nullable=False),
+    sa.Column("model", sa.Text, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.UniqueConstraint("subject_kind", "subject_id", name="uq_semantic_subject"),
+    sa.Index("ix_semantic_campus_kind", "campus_id", "subject_kind"),
+)
+
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
 RLS_TABLES: tuple[str, ...] = (
     "principals",
@@ -176,4 +207,5 @@ RLS_TABLES: tuple[str, ...] = (
     "opportunity_seats",
     "match_envelopes",
     "consent_records",
+    "semantic_index",
 )

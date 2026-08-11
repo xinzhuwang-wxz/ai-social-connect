@@ -34,6 +34,7 @@ def load_principals(
             "zone": p.zone,
             "skills": list(p.skills),
             "availability": p.availability,
+            "self_intro": p.self_intro,
         }
         for p in population.people
     ]

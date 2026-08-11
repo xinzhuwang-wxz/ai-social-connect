@@ -1,6 +1,8 @@
 services:
   db:
-    image: postgres:18-alpine
+    # 官方 pgvector 镜像而不是 postgres:18-alpine —— 后者不含 vector 扩展，
+    # `CREATE EXTENSION vector` 会直接失败。
+    image: pgvector/pgvector:pg18
     environment:
       POSTGRES_USER: cofield
       POSTGRES_PASSWORD: cofield

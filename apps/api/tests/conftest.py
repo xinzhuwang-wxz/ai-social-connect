@@ -45,7 +45,7 @@ def database_url() -> Generator[str, None, None]:
     except ImportError:  # 旧版 testcontainers
         from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:18-alpine", driver="psycopg") as pg:
+    with PostgresContainer("pgvector/pgvector:pg18", driver="psycopg") as pg:
         yield pg.get_connection_url()
 
 

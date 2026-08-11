@@ -47,6 +47,9 @@ GRANTABLE_FIELDS: frozenset[str] = frozenset(
         "boundaries",
         "open_questions",
         "portfolio_link",
+        # 自己写的一段话。它进语义索引，所以**必须**可被逐项授权与撤回——
+        # 撤回时连带删掉索引行，否则原话会继续参与别人的匹配。
+        "self_intro",
     }
 )
 
