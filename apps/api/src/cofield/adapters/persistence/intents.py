@@ -55,6 +55,7 @@ def _to_domain(row: Row[tuple[object, ...]]) -> IntentSignal:
         ),
         created_at=row.created_at,
         expires_at=row.expires_at,
+        action_kind=row.action_kind,
     )
 
 
@@ -77,6 +78,7 @@ def _to_row(signal: IntentSignal, campus_id: str) -> dict[str, object]:
         "boundaries": list(c.boundaries),
         "open_questions": list(c.open_questions),
         "uncertain_fields": sorted(c.uncertain_fields),
+        "action_kind": signal.action_kind,
         "created_at": signal.created_at,
         "expires_at": signal.expires_at,
     }
@@ -115,6 +117,33 @@ class IntentRepository:
             stmt = stmt.where(intent_signals.c.state.in_([s.value for s in states]))
         rows = self._conn.execute(
             stmt.order_by(intent_signals.c.created_at.desc())
+        ).all()
+        return [_to_domain(r) for r in rows]
+
+    def list_in_unit(
+        self, action_kind: str | None, *, now: datetime
+    ) -> list[IntentSignal]:
+        """一个市场单元里还在等的意图。
+
+        `NULL = NULL` 在 SQL 里不成立，所以"没挑场景"那一拨要单独判——
+        写成 `== None` 会静默返回空集，那一拨人就永远等不到清算。
+        """
+        kind_clause = (
+            intent_signals.c.action_kind.is_(None)
+            if action_kind is None
+            else intent_signals.c.action_kind == action_kind
+        )
+        rows = self._conn.execute(
+            sa.select(intent_signals)
+            .where(intent_signals.c.state == IntentState.ACTIVE.value)
+            .where(kind_clause)
+            .where(
+                sa.or_(
+                    intent_signals.c.expires_at.is_(None),
+                    intent_signals.c.expires_at > now,
+                )
+            )
+            .order_by(intent_signals.c.deadline.asc().nulls_last())
         ).all()
         return [_to_domain(r) for r in rows]
 

@@ -82,6 +82,9 @@ intent_signals = sa.Table(
     sa.Column("boundaries", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
     sa.Column("open_questions", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
     sa.Column("uncertain_fields", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
+    #: 属于哪个行动类别。撮合窗口长度由它决定，所以它是真列不是 extras 里的键——
+    #: 清算时要按它分组查询。可空：用户可以不挑场景直接写一句话。
+    sa.Column("action_kind", sa.Text),
     #: 行动类别注册表声明的扩展字段。新增类别不改表结构。
     sa.Column("extras", sa.JSON, nullable=False, server_default="{}"),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
@@ -90,6 +93,8 @@ intent_signals = sa.Table(
     # 撮合窗口按截止期排序取"即将离开市场"的人，这个索引服务那次查询。
     sa.Index("ix_intents_campus_deadline", "campus_id", "deadline"),
     sa.Index("ix_intents_principal", "campus_id", "principal_id"),
+    # 清算按「市场单元」取人：同校园、同类别、还在等的。
+    sa.Index("ix_intents_unit", "campus_id", "action_kind", "state"),
 )
 
 organizations = sa.Table(
@@ -198,6 +203,36 @@ semantic_index = sa.Table(
     sa.Index("ix_semantic_campus_kind", "campus_id", "subject_kind"),
 )
 
+#: 窗口清算产出的成局提案。
+#:
+#: **它不是共同事件。** 提案只是"我们觉得这几个人能凑一队"，
+#: 事件要等全员真人确认才诞生（见 #9 的确认门）。把两者放在同一张表里，
+#: 迟早会有人拿提案当既成事实——所以它们分开，而且这张表里没有任何
+#: 表示"已成局"的状态。
+formation_proposals = sa.Table(
+    "formation_proposals",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    #: 这个提案是回应谁的需求。
+    sa.Column("intent_id", sa.Uuid, nullable=False),
+    sa.Column("action_kind", sa.Text),
+    #: 哪一次清算产出的。同一次清算的提案共享这个时刻——
+    #: 它是"市场变厚"这件事的证据，也是复盘时的分组依据。
+    sa.Column("cleared_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    #: 组员（含发起人）。顺序即求解器给出的顺序，发起人在首位。
+    sa.Column("member_ids", PgArray(sa.Uuid), nullable=False),
+    #: 成局证明的机器可读形态。界面上呈现的是它的转写，不是它的替代品——
+    #: 申诉、A/B 与审计都读这个结构。
+    sa.Column("proof", sa.JSON, nullable=False),
+    #: 稳定性未通过的分区不得成为提案，所以这里恒为真。
+    #: 仍然存下来，是为了让"这条不变量有没有被绕过"可被查询验证。
+    sa.Column("stability_passed", sa.Boolean, nullable=False),
+    sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_proposals_intent", "campus_id", "intent_id"),
+    sa.Index("ix_proposals_cleared", "campus_id", "cleared_at"),
+)
+
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
 RLS_TABLES: tuple[str, ...] = (
     "principals",
@@ -208,4 +243,5 @@ RLS_TABLES: tuple[str, ...] = (
     "match_envelopes",
     "consent_records",
     "semantic_index",
+    "formation_proposals",
 )

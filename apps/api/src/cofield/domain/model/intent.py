@@ -135,6 +135,10 @@ class IntentSignal:
     content: IntentContent
     created_at: datetime
     expires_at: datetime | None = None
+    #: 属于哪个行动类别。撮合窗口长度由它决定。
+    #: 可以为空——首屏有场景卡，但用户也可以不挑直接写一句话，
+    #: 这时候按默认窗口清算，不能因为"没归类"就永远不撮合。
+    action_kind: str | None = None
 
     @property
     def is_matchable(self) -> bool:
