@@ -45,6 +45,14 @@ class OpportunityOut(BaseModel):
     location_scope: str | None
     qualifications: list[str]
     state: str
+    #: 真人负责人。
+    #:
+    #: 领域模型里它是必填的（"没有负责人的自动成局会导致责任分散——
+    #: 匿名聚合能降低发起压力，但没人承担下一步时事情就烂在那里"），
+    #: 而这一层曾经不透出它，于是界面上每一条招募都显示"没写谁负责"。
+    #: **领域里守住的东西，接口不透出等于没守住。**
+    steward_id: UUID
+    steward_name: str
 
 
 class CreateOpportunityRequest(BaseModel):
@@ -59,9 +67,14 @@ class CreateOpportunityRequest(BaseModel):
 
 
 def _out(
-    opportunity: ActionOpportunity, org_name: str, org_verified: bool
+    opportunity: ActionOpportunity,
+    org_name: str,
+    org_verified: bool,
+    steward_name: str = "这位同学",
 ) -> OpportunityOut:
     return OpportunityOut(
+        steward_id=opportunity.steward_id,
+        steward_name=steward_name,
         id=opportunity.id,
         organization_id=opportunity.organization_id,
         organization_name=org_name,
@@ -86,13 +99,41 @@ def list_opportunities(repos: ReposDep) -> list[OpportunityOut]:
     """还能报名的招募。已满和已过期的不出现——列表上每一条都该能点。"""
     orgs = {o.id: o for o in repos.organizations.list_all()}
     found = repos.opportunities.list_open()
+    stewards = {
+        o.steward_id: person.display_name
+        for o in found
+        if (person := repos.principals.get(o.steward_id)) is not None
+    }
     return [
         _out(
             o,
             orgs[o.organization_id].name if o.organization_id in orgs else "未知组织",
             orgs[o.organization_id].verified if o.organization_id in orgs else False,
+            stewards.get(o.steward_id, "这位同学"),
         )
         for o in found
+    ]
+
+
+class OrganizationOut(BaseModel):
+    id: UUID
+    name: str
+    #: 没被核过的组织**发不了招募**。列出来但标清楚，
+    #: 比直接过滤掉好——组织者要知道自己为什么发不出去。
+    verified: bool
+
+
+@router.get("/organizations", response_model=list[OrganizationOut])
+def list_organizations(repos: ReposDep) -> list[OrganizationOut]:
+    """能代表哪些组织发招募。
+
+    没有这个端点时，界面只能从"已经发过招募的组织"里反推可选项——
+    于是一个**全新的、刚被核过的组织发不出第一份招募**，
+    而那正是它最需要这个功能的时候。
+    """
+    return [
+        OrganizationOut(id=o.id, name=o.name, verified=o.verified)
+        for o in repos.organizations.list_all()
     ]
 
 

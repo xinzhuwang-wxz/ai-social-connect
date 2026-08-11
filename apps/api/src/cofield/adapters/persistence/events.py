@@ -152,7 +152,12 @@ class EventRepository:
                     space_id=space_id,
                     kind="task",
                     title=first_action,
-                    state="open",
+                    # **必须是 `task` 自己声明过的状态。**
+                    # 这里原来写的是 `open`（决策门的初始态），于是每个新空间的
+                    # 第一张卡都处在自己类型没有的状态里——推进和进度都建在
+                    # 那张声明表上，一个不在表里的值让两者同时失去意义，
+                    # 而界面上它看起来完全正常。
+                    state="todo",
                     assignee_id=steward_id,
                     due_at=deadline,
                     drafted_by_agent=False,

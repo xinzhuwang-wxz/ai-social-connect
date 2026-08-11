@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -143,15 +144,36 @@ def test_it_finds_a_group_that_covers_every_gap() -> None:
 # --- 硬约束真的是硬的 -------------------------------------------------------
 
 
-def test_perfect_skills_cannot_buy_a_time_conflict() -> None:
-    """技能挑不出毛病，但整组永远凑不出连续两段。
+def test_time_alone_no_longer_kills_a_group() -> None:
+    """整组永远凑不出连续两段，**照样成局**。
 
-    结论必须是无解，而不是「分低但还是给你三组」——软分抵不掉一条硬冲突。
+    这条曾经断言的是相反的事。改判的理由（ADR 0006）：时间不合适本来就有
+    更好的表达——**他不确认**。确认门已经在那里，而且没回不算拒绝、
+    拒绝零负担。提前筛掉反而更差：他可能愿意为这件事挪时间，而课表是
+    三周前填的「通常有空」不是承诺。
+
+    代价曾经很实在：四人组 55% 的组合被这一条直接判死。
     """
     every_other = _mask(*range(0, WEEK_SLOTS, 2))  # 单段有空，但永远连不成两段
     pool = tuple(_member(_name(i), ("拍摄", "剪辑"), every_other) for i in range(8))
 
     result = solve(SolveRequest(requirement=_requirement(), candidates=pool, group_count=3))
+
+    assert result.groups, "时间对不上不该再判死一个技能完全够用的组"
+
+
+def test_the_time_constraint_is_still_there_for_whoever_needs_it() -> None:
+    """**能力留着，默认关掉。**
+
+    夜爬这类事情真的需要"必须凑得出共同时段"，把 `contiguous_run` 设回 2
+    就恢复原来的行为。删掉这段逻辑会让那种场景以后无从表达，而重新加回来
+    要动求解器、证明、稳定性三处。
+    """
+    every_other = _mask(*range(0, WEEK_SLOTS, 2))
+    pool = tuple(_member(_name(i), ("拍摄", "剪辑"), every_other) for i in range(8))
+    strict = replace(_requirement(), contiguous_run=2)
+
+    result = solve(SolveRequest(requirement=strict, candidates=pool, group_count=3))
 
     assert result.groups == ()
     assert result.solver_status is SolverStatus.INFEASIBLE
@@ -159,7 +181,11 @@ def test_perfect_skills_cannot_buy_a_time_conflict() -> None:
 
 
 def test_pairwise_time_never_implies_group_time() -> None:
-    """两两都能对上，三个人就对不上——这是这个求解器存在的理由。
+    """两两都能对上，三个人就对不上。
+
+    时间默认不再作硬约束（ADR 0006），所以这条显式打开它——它守的是
+    **群体属性不等于两两属性**这个建模判断，那个判断和"默认要不要开"
+    是两件事，而且它是这个求解器（而不是一个两两匹配器）存在的理由。
 
     发起人整周有空，所以每组的共同空闲就是被选中那几位的交集：
     周雨和林岸在周一，周雨和沈知在周二，林岸和沈知在周三，三个人交集为空。
@@ -173,12 +199,16 @@ def test_pairwise_time_never_implies_group_time() -> None:
 
     trio = solve(
         SolveRequest(
-            requirement=_requirement(team_min=3, team_max=3), candidates=pool, group_count=1
+            requirement=_requirement(team_min=3, team_max=3, contiguous_run=2),
+            candidates=pool,
+            group_count=1,
         )
     )
     quartet = solve(
         SolveRequest(
-            requirement=_requirement(team_min=4, team_max=4), candidates=pool, group_count=1
+            requirement=_requirement(team_min=4, team_max=4, contiguous_run=2),
+            candidates=pool,
+            group_count=1,
         )
     )
 
@@ -298,8 +328,12 @@ def test_every_gap_is_named_with_who_fills_it() -> None:
 
 
 def test_the_slots_it_reports_are_really_common_to_everyone() -> None:
-    """报出来的时段要经得起复核：整组按位与之后确实连得上。"""
-    requirement = _requirement()
+    """报出来的时段要经得起复核：整组按位与之后确实连得上。
+
+    显式打开时间约束——默认关掉之后（ADR 0006）这一条测的仍然是
+    「报出来的数字不许是假的」，而那个要求和默认开不开无关。
+    """
+    requirement = _requirement(contiguous_run=2)
     result = solve(
         SolveRequest(requirement=requirement, candidates=_campus(), group_count=3)
     )

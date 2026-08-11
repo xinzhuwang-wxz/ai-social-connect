@@ -178,7 +178,7 @@ consent_records = sa.Table(
 )
 
 #: 语义索引的维度。与 Embedder 端口声明的维度必须一致。
-EMBEDDING_DIMENSIONS = 384
+EMBEDDING_DIMENSIONS = 1024
 
 #: 语义召回索引。
 #:

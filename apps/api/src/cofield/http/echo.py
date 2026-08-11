@@ -19,8 +19,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from cofield.adapters.llm import Cassette, LiteLLMComposer
-from cofield.adapters.persistence.memory import EvidenceItem, MemoryRepository
+from cofield.adapters.persistence.memory import (
+    EvidenceItem,
+    FacetState,
+    MemoryRepository,
+)
 from cofield.adapters.persistence.schema import (
+    commitments,
     event_members,
     formation_proposals,
     shared_events,
@@ -58,6 +63,9 @@ class InvitationOut(BaseModel):
     time_cost: str | None = None
     #: 到什么时候要答复。
     answer_by: str
+    #: 我答过没有。**没答和拒绝是两件事**——少了这一位，
+    #: 界面要么把答过的人再问一遍，要么为每张卡多打一次请求。
+    my_answer: str = "pending"
 
 
 @router.get("/proposals/{proposal_id}/invitation", response_model=InvitationOut)
@@ -79,6 +87,15 @@ def invitation(
     if row is None or principal_id not in set(row.member_ids):
         raise HTTPException(status_code=404, detail="找不到这个邀请")
 
+    return _invitation(row, repos, principal_id, conn)
+
+
+def _invitation(
+    row: sa.Row[tuple[object, ...]],
+    repos: ReposDep,
+    principal_id: UUID,
+    conn: ConnDep,
+) -> InvitationOut:
     intent = repos.intents.get(row.intent_id)
     others = [
         person.display_name
@@ -108,14 +125,21 @@ def invitation(
 
     gives = sorted(my_skills & needs)
 
+    answered = conn.execute(
+        sa.select(commitments.c.state)
+        .where(commitments.c.proposal_id == row.id)
+        .where(commitments.c.principal_id == principal_id)
+    ).scalar_one_or_none()
+
     return InvitationOut(
-        proposal_id=proposal_id,
+        proposal_id=row.id,
         about=intent.content.goal if intent else "一件事",
         with_others=others,
         i_get=gets,
         i_give=[f"你的「{skill}」" for skill in gives],
         time_cost=None,
         answer_by=row.expires_at.isoformat(),
+        my_answer=str(answered or "pending"),
     )
 
 
@@ -160,12 +184,29 @@ class DraftOut(BaseModel):
     drafted_by_agent: bool
 
 
+class ConfirmedOut(BaseModel):
+    facet_id: UUID
+    text: str
+    #: 这句话现在被几处用着。收回之后立刻是 0——它走的是唯一那条取值路径，
+    #: 不是另算一份，所以不存在会变旧的副本。
+    in_use: int
+
+
 class EchoOut(BaseModel):
     event_title: str
     evidence: list[EvidenceOut]
     recap: RecapOut | None = None
     #: 等我点头的。**没点过的永远不出现在任何人的证明里。**
-    to_confirm: list[DraftOut] = Field(default_factory=list)
+    #:
+    #: 必填而不是可选：可选会让每个调用点都写一次 `?? []`，
+    #: 而其中总有一处会忘。
+    to_confirm: list[DraftOut]
+    #: 这件事上我**已经点过头**的几条。
+    #:
+    #: 少了它，刷新一次页面"已经在用的"那一堆就消失了——而"随时收得回"
+    #: 这条权利正是挂在那一堆上的。界面为了补它只能把我在**所有**事情上的
+    #: 记录全拉过来，只为用其中几条。
+    confirmed: list[ConfirmedOut]
 
 
 class WriteOwnIn(BaseModel):
@@ -264,9 +305,25 @@ def echo(
         event_id=event_id, principal_id=principal_id, now=clock.now()
     )
 
+    # `in_use` 走的是**唯一那条取值路径**（`citable`），不是数一数有多少
+    # 地方列过这个 id——后者会在收回之后仍然为正，而"收回即时生效"这条
+    # 承诺正是靠"不存在第二份会变旧的副本"成立的。
+    mine_here = [
+        ConfirmedOut(
+            facet_id=facet.id,
+            text=facet.text,
+            in_use=len(
+                repo.citable([principal_id], permitted=frozenset({facet.id}))
+            ),
+        )
+        for facet in repo.for_principal(principal_id)
+        if facet.event_id == event_id and facet.state is FacetState.CONFIRMED
+    ]
+
     return EchoOut(
         event_title=title,
         evidence=evidence,
+        confirmed=mine_here,
         recap=(
             RecapOut(text=recap.text, grounded_in=list(recap.grounded_in))
             if recap
@@ -322,24 +379,28 @@ def write_own(
     )
 
 
-@router.get("/me/proposals", response_model=list[UUID])
+@router.get("/me/proposals", response_model=list[InvitationOut])
 def my_invitations(
     conn: ConnDep,
     campus: CampusDep,
     clock: ClockDep,
+    repos: ReposDep,
     principal_id: PrincipalDep,
-) -> list[UUID]:
-    """我被邀请进了哪几队。
+) -> list[InvitationOut]:
+    """我被邀请进了哪几队，以及每一条我会得到什么。
 
-    界面靠它把「这次你会得到什么」那一屏找出来——否则被邀请的人
-    根本不知道有人在等他答复。
+    **回整屏而不是一串 id。** 只回 id 的话，N 条邀请就是 1+N 次请求，
+    再加上每张卡要单独问一次"我答过没有"，就是 1+2N。而这一次查询
+    已经把行拿到手了，顺手拼出来几乎不多花什么。
+
+    过期和作废的不回——它们还挂在那里只会让人白跑一趟。
     """
     rows = conn.execute(
-        sa.select(formation_proposals.c.id)
+        sa.select(formation_proposals)
         .where(formation_proposals.c.member_ids.any(principal_id))
         .where(formation_proposals.c.withdrawn_at.is_(None))
         .where(formation_proposals.c.expires_at > clock.now())
         .order_by(formation_proposals.c.cleared_at.desc())
     ).all()
-    return [row.id for row in rows]
+    return [_invitation(row, repos, principal_id, conn) for row in rows]
 

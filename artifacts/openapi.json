@@ -594,6 +594,60 @@
         }
       }
     },
+    "/api/organizations": {
+      "get": {
+        "tags": [
+          "opportunities"
+        ],
+        "summary": "List Organizations",
+        "description": "能代表哪些组织发招募。\n\n没有这个端点时，界面只能从\"已经发过招募的组织\"里反推可选项——\n于是一个**全新的、刚被核过的组织发不出第一份招募**，\n而那正是它最需要这个功能的时候。",
+        "operationId": "list_organizations_api_organizations_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrganizationOut"
+                  },
+                  "title": "Response List Organizations Api Organizations Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/organizations/{organization_id}/opportunities": {
       "get": {
         "tags": [
@@ -2870,7 +2924,7 @@
           "echo"
         ],
         "summary": "My Invitations",
-        "description": "我被邀请进了哪几队。\n\n界面靠它把「这次你会得到什么」那一屏找出来——否则被邀请的人\n根本不知道有人在等他答复。",
+        "description": "我被邀请进了哪几队，以及每一条我会得到什么。\n\n**回整屏而不是一串 id。** 只回 id 的话，N 条邀请就是 1+N 次请求，\n再加上每张卡要单独问一次\"我答过没有\"，就是 1+2N。而这一次查询\n已经把行拿到手了，顺手拼出来几乎不多花什么。\n\n过期和作废的不回——它们还挂在那里只会让人白跑一趟。",
         "operationId": "my_invitations_api_me_proposals_get",
         "parameters": [
           {
@@ -2914,8 +2968,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "type": "string",
-                    "format": "uuid"
+                    "$ref": "#/components/schemas/InvitationOut"
                   },
                   "title": "Response My Invitations Api Me Proposals Get"
                 }
@@ -3220,6 +3273,30 @@
         "title": "CompileResponse",
         "description": "抽取结果。**它只是草稿**——没有用户确认，什么都进不了撮合。"
       },
+      "ConfirmedOut": {
+        "properties": {
+          "facet_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Facet Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "in_use": {
+            "type": "integer",
+            "title": "In Use"
+          }
+        },
+        "type": "object",
+        "required": [
+          "facet_id",
+          "text",
+          "in_use"
+        ],
+        "title": "ConfirmedOut"
+      },
       "ConflictOut": {
         "properties": {
           "field": {
@@ -3431,12 +3508,21 @@
             },
             "type": "array",
             "title": "To Confirm"
+          },
+          "confirmed": {
+            "items": {
+              "$ref": "#/components/schemas/ConfirmedOut"
+            },
+            "type": "array",
+            "title": "Confirmed"
           }
         },
         "type": "object",
         "required": [
           "event_title",
-          "evidence"
+          "evidence",
+          "to_confirm",
+          "confirmed"
         ],
         "title": "EchoOut"
       },
@@ -4110,6 +4196,11 @@
           "answer_by": {
             "type": "string",
             "title": "Answer By"
+          },
+          "my_answer": {
+            "type": "string",
+            "title": "My Answer",
+            "default": "pending"
           }
         },
         "type": "object",
@@ -4406,6 +4497,18 @@
           "counts_as_done": {
             "type": "boolean",
             "title": "Counts As Done"
+          },
+          "space_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Space Id"
           }
         },
         "type": "object",
@@ -4637,6 +4740,15 @@
           "state": {
             "type": "string",
             "title": "State"
+          },
+          "steward_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Steward Id"
+          },
+          "steward_name": {
+            "type": "string",
+            "title": "Steward Name"
           }
         },
         "type": "object",
@@ -4653,9 +4765,35 @@
           "deadline",
           "location_scope",
           "qualifications",
-          "state"
+          "state",
+          "steward_id",
+          "steward_name"
         ],
         "title": "OpportunityOut"
+      },
+      "OrganizationOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "verified": {
+            "type": "boolean",
+            "title": "Verified"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "verified"
+        ],
+        "title": "OrganizationOut"
       },
       "PreviewOut": {
         "properties": {

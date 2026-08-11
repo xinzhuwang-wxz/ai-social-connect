@@ -53,6 +53,7 @@ from cofield.adapters.persistence.schema import (
     intent_signals,
     principals,
     shared_events,
+    spaces,
 )
 from cofield.domain.model.consent import Audience, MatchEnvelope
 from cofield.http.deps import CampusDep, ClockDep, ConnDep, PrincipalDep, ReposDep
@@ -84,6 +85,9 @@ class MyEventOut(BaseModel):
     #: 同意在这里被指名，否则「和谁做的」根本没法呈现。
     with_others: list[str]
     counts_as_done: bool
+    #: 这件事的空间。**没有它「我参加过的」就走不到项目空间**——
+    #: 而那是这个产品里唯一能继续做事的地方。
+    space_id: UUID | None = None
 
 
 class RecordSourceOut(BaseModel):
@@ -185,11 +189,12 @@ def my_events(conn: ConnDep, principal_id: PrincipalDep) -> list[MyEventOut]:
             shared_events.c.formed_at,
             shared_events.c.deadline,
             event_members.c.left_at,
+            spaces.c.id.label("space_id"),
         )
         .select_from(
             event_members.join(
                 shared_events, shared_events.c.id == event_members.c.event_id
-            )
+            ).outerjoin(spaces, spaces.c.event_id == shared_events.c.id)
         )
         .where(event_members.c.principal_id == principal_id)
         .order_by(shared_events.c.formed_at.desc(), shared_events.c.id.asc())
@@ -209,6 +214,7 @@ def my_events(conn: ConnDep, principal_id: PrincipalDep) -> list[MyEventOut]:
             # 中途退出的事仍然是我的经历，但"我们一起做完过"这句话对我不成立。
             # 这和 `MemoryRepository.co_completed()` 的 `left_at IS NULL` 是同一个判断。
             counts_as_done=r.state == "completed" and r.left_at is None,
+            space_id=r.space_id,
         )
         for r in rows
     ]

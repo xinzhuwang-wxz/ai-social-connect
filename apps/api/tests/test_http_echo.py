@@ -255,7 +255,10 @@ def test_my_invitations_only_lists_live_ones(
 
     body = client.get("/api/me/proposals").json()
 
-    assert str(live) in [str(x) for x in body]
+    # 回的是整屏而不是一串 id：只回 id 的话，N 条邀请就是 1+N 次请求，
+    # 每张卡再单独问一次"我答过没有"就是 1+2N。
+    assert [str(x["proposal_id"]) for x in body] == [str(live)]
+    assert body[0]["my_answer"] == "pending", "没答和拒绝是两件事"
 
 
 # --- 文案 ---

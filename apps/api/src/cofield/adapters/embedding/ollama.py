@@ -14,8 +14,20 @@ from collections.abc import Sequence
 from cofield.domain.ports.embedder import EmbeddingUnavailable
 
 DEFAULT_ENDPOINT = "http://127.0.0.1:11434"
-DEFAULT_MODEL = "all-minilm"
-DEFAULT_DIMENSIONS = 384
+#: 三个本地模型在**真实任务上**实测之后选的，不是按名气选的。
+#:
+#: 任务：「想找个写朋克风格文案的」，从 499 个会写文案的人里把文风野的
+#: 捞到前面（基线 7.0%）。
+#:
+#:     bge-m3                    1024 维   10.4s   top-20 命中 45%   6.4 倍
+#:     all-minilm                 384 维    4.6s   top-20 命中 25%   3.6 倍
+#:     paraphrase-multilingual    768 维    6.3s   top-20 命中 10%   1.4 倍
+#:
+#: paraphrase-multilingual 在这个任务上**比 all-minilm 还差**——多语言
+#: 训练目标是句子改写等价，而我们要的是"文风相近"，两者不是一回事。
+#: 这就是为什么这个选择必须实测：它和常识相反。
+DEFAULT_MODEL = "bge-m3"
+DEFAULT_DIMENSIONS = 1024
 
 
 class OllamaEmbedder:

@@ -61,14 +61,23 @@ class Requirement:
     team_max: int
     deadline: datetime
     zone: str | None = None
-    #: 需要多长的一段整组共同空闲，单位是时段（每段约两小时）。
+    #: 需要多长的一段整组共同空闲，单位是时段。**默认 0 = 不作硬约束。**
     #:
-    #: 是**段长**不是段数——「至少存在一段连着 2 个时段都空着的时间」，
-    #: 不是「至少有 2 个这样的时间段可选」。原来的名字两种都读得通，
-    #: 实现按段长、注释按段数，改名把这个歧义消掉。
-    #: 默认 2 的依据是实测：任意单段几乎总能凑上（四人组 300 次里 285+ 次），
-    #: 连续两段才是真约束（四人组 50%，五人组 27%）。
-    contiguous_run: int = 2
+    #: 它曾经默认是 2，理由是一次实测：任意单段几乎总能凑上，连续两段
+    #: 只有 45%（四人组）。数字是真的，结论下错了——「这个约束咬得动」
+    #: 不等于「这个约束该存在」。
+    #:
+    #: 时间不合适本来就有更好的表达：**他不确认**。确认门已经在那里，
+    #: 而且没回不算拒绝、拒绝零负担、有条件接受会生成新一版。提前筛掉
+    #: 反而更差：他可能愿意为这件事挪时间；课表是三周前填的「通常有空」
+    #: 不是承诺；而且就算时间对得上也可能聊不来而退出。
+    #:
+    #: 代价是实打实的：四人组 55% 的组合被直接判死，五人组 79%。
+    #:
+    #: **能力留着，默认关掉。** 求解器那段本来就写成 `if > 0`，
+    #: 某个高风险类别真需要（夜爬必须凑得出共同时段）把它设回 2 即可。
+    #: 见 ADR 0006。
+    contiguous_run: int = 0
     #: 每人最多同时参与几个共同事件。
     max_concurrent: int = 3
     excluded: frozenset[UUID] = frozenset()
@@ -116,7 +125,9 @@ class Objective:
 DEFAULT_OBJECTIVES: tuple[Objective, ...] = (
     Objective(ObjectiveKind.ROLE_FIT, 3.0),
     Objective(ObjectiveKind.RECIPROCITY, 2.0),
-    Objective(ObjectiveKind.TIME_SLACK, 1.5),
+    # 时间不再是硬约束（ADR 0006），这一项从「证明里的保证」降成一条便利：
+    # 共同空闲多的组仍然排前面，但凑不出也照样成局。
+    Objective(ObjectiveKind.TIME_SLACK, 0.8),
     Objective(ObjectiveKind.CROSS_MAJOR, 0.8),
     # 负权重：被反复提案的人要降权，避免所有提案集中到少数热门候选。
     Objective(ObjectiveKind.EXPOSURE_FAIRNESS, -1.0),

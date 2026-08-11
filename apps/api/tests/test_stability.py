@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import random
+import re
 import time
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -211,7 +212,12 @@ def test_a_defection_reason_reads_like_chinese_not_like_a_dump() -> None:
 
     assert people["乙"].display_name in reason
     assert "第 1 组" in reason
-    assert "从 1 段变成 7 段" in reason, "要给得出两边的数字，才能被质疑"
+    # 断言的是**给不给得出两边的数字**这个性质，不是那两个数。
+    # 它们会随一些无关的默认值漂移（时间约束默认关掉之后就变了），
+    # 而钉死具体数字只会让人在下次漂移时把断言改松，而不是想清楚。
+    shift = re.search(r"从 (\d+) 段变成 (\d+) 段", reason)
+    assert shift, f"没给出两边的数字，用户无从质疑：{reason}"
+    assert int(shift.group(2)) > int(shift.group(1)), "说他更划算，数字却没变好"
     assert str(people["乙"].principal_id) not in reason
 
 

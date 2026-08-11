@@ -174,6 +174,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Organizations
+         * @description 能代表哪些组织发招募。
+         *
+         *     没有这个端点时，界面只能从"已经发过招募的组织"里反推可选项——
+         *     于是一个**全新的、刚被核过的组织发不出第一份招募**，
+         *     而那正是它最需要这个功能的时候。
+         */
+        get: operations["list_organizations_api_organizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/organizations/{organization_id}/opportunities": {
         parameters: {
             query?: never;
@@ -883,10 +907,13 @@ export interface paths {
         };
         /**
          * My Invitations
-         * @description 我被邀请进了哪几队。
+         * @description 我被邀请进了哪几队，以及每一条我会得到什么。
          *
-         *     界面靠它把「这次你会得到什么」那一屏找出来——否则被邀请的人
-         *     根本不知道有人在等他答复。
+         *     **回整屏而不是一串 id。** 只回 id 的话，N 条邀请就是 1+N 次请求，
+         *     再加上每张卡要单独问一次"我答过没有"，就是 1+2N。而这一次查询
+         *     已经把行拿到手了，顺手拼出来几乎不多花什么。
+         *
+         *     过期和作废的不回——它们还挂在那里只会让人白跑一趟。
          */
         get: operations["my_invitations_api_me_proposals_get"];
         put?: never;
@@ -1026,6 +1053,18 @@ export interface components {
             /** Fall Back To Form */
             fall_back_to_form: boolean;
         };
+        /** ConfirmedOut */
+        ConfirmedOut: {
+            /**
+             * Facet Id
+             * Format: uuid
+             */
+            facet_id: string;
+            /** Text */
+            text: string;
+            /** In Use */
+            in_use: number;
+        };
         /**
          * ConflictOut
          * @description 指出是哪两条约束打架，不泛泛说"输入有误"。
@@ -1108,7 +1147,9 @@ export interface components {
             evidence: components["schemas"]["EvidenceOut"][];
             recap?: components["schemas"]["RecapOut"] | null;
             /** To Confirm */
-            to_confirm?: components["schemas"]["DraftOut"][];
+            to_confirm: components["schemas"]["DraftOut"][];
+            /** Confirmed */
+            confirmed: components["schemas"]["ConfirmedOut"][];
         };
         /** EnvelopeOut */
         EnvelopeOut: {
@@ -1395,6 +1436,11 @@ export interface components {
             time_cost?: string | null;
             /** Answer By */
             answer_by: string;
+            /**
+             * My Answer
+             * @default pending
+             */
+            my_answer: string;
         };
         /**
          * ItemKindOut
@@ -1521,6 +1567,8 @@ export interface components {
             with_others: string[];
             /** Counts As Done */
             counts_as_done: boolean;
+            /** Space Id */
+            space_id?: string | null;
         };
         /**
          * MyRecordOut
@@ -1622,6 +1670,25 @@ export interface components {
             qualifications: string[];
             /** State */
             state: string;
+            /**
+             * Steward Id
+             * Format: uuid
+             */
+            steward_id: string;
+            /** Steward Name */
+            steward_name: string;
+        };
+        /** OrganizationOut */
+        OrganizationOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Verified */
+            verified: boolean;
         };
         /**
          * PreviewOut
@@ -2288,6 +2355,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OpportunityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_organizations_api_organizations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationOut"][];
                 };
             };
             /** @description Validation Error */
@@ -3374,7 +3472,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["InvitationOut"][];
                 };
             };
             /** @description Validation Error */
