@@ -11,7 +11,6 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, HTTPException
 
-from cofield.adapters.persistence.intents import IntentRepository
 from cofield.domain.model.intent import (
     IntentContent,
     IntentSignal,
@@ -21,12 +20,11 @@ from cofield.domain.model.intent import (
 )
 from cofield.domain.ports.intent_extractor import ExtractionFailed
 from cofield.http.deps import (
-    CampusDep,
     ClockDep,
-    ConnDep,
     ExtractorDep,
     KindsDep,
     PrincipalDep,
+    ReposDep,
 )
 from cofield.http.schemas import (
     ActionKindOut,
@@ -107,9 +105,8 @@ def compile_intent(
 @router.post("/intents", response_model=IntentOut, status_code=201)
 def create_intent(
     payload: CreateIntentRequest,
-    conn: ConnDep,
+    repos: ReposDep,
     clock: ClockDep,
-    campus: CampusDep,
     principal_id: PrincipalDep,
 ) -> IntentOut:
     """保存用户校对后的意图。
@@ -125,15 +122,13 @@ def create_intent(
         content=_to_domain(payload.content),
         created_at=clock.now(),
     )
-    IntentRepository(conn, clock, campus).save(signal)
+    repos.intents.save(signal)
     return IntentOut.of(signal)
 
 
 @router.get("/intents/{intent_id}", response_model=IntentOut)
-def get_intent(
-    intent_id: UUID, conn: ConnDep, clock: ClockDep, campus: CampusDep
-) -> IntentOut:
-    signal = IntentRepository(conn, clock, campus).get(intent_id)
+def get_intent(intent_id: UUID, repos: ReposDep) -> IntentOut:
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
     return IntentOut.of(signal)
@@ -143,30 +138,24 @@ def get_intent(
 def revise_intent(
     intent_id: UUID,
     payload: ReviseIntentRequest,
-    conn: ConnDep,
-    clock: ClockDep,
-    campus: CampusDep,
+    repos: ReposDep,
 ) -> IntentOut:
     """改内容。改完回到草稿——旧的确认不能沿用到新内容上。"""
-    repo = IntentRepository(conn, clock, campus)
-    signal = repo.get(intent_id)
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
     try:
         revised = signal.revise(_to_domain(payload.content))
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    repo.save(revised)
+    repos.intents.save(revised)
     return IntentOut.of(revised)
 
 
 @router.post("/intents/{intent_id}:confirm", response_model=IntentOut)
-def confirm_intent(
-    intent_id: UUID, conn: ConnDep, clock: ClockDep, campus: CampusDep
-) -> IntentOut:
+def confirm_intent(intent_id: UUID, repos: ReposDep, clock: ClockDep) -> IntentOut:
     """用户确认结构化结果无误。这是"未经确认不得进入撮合"的那道门。"""
-    repo = IntentRepository(conn, clock, campus)
-    signal = repo.get(intent_id)
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
     try:
@@ -183,30 +172,25 @@ def confirm_intent(
                 ],
             },
         ) from exc
-    repo.save(confirmed)
+    repos.intents.save(confirmed)
     return IntentOut.of(confirmed)
 
 
 @router.post("/intents/{intent_id}:withdraw", response_model=IntentOut)
-def withdraw_intent(
-    intent_id: UUID, conn: ConnDep, clock: ClockDep, campus: CampusDep
-) -> IntentOut:
-    repo = IntentRepository(conn, clock, campus)
-    signal = repo.get(intent_id)
+def withdraw_intent(intent_id: UUID, repos: ReposDep) -> IntentOut:
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
     withdrawn = signal.withdraw()
-    repo.save(withdrawn)
+    repos.intents.save(withdrawn)
     return IntentOut.of(withdrawn)
 
 
 @router.get("/me/intents", response_model=list[IntentOut])
-def list_my_intents(
-    conn: ConnDep, clock: ClockDep, campus: CampusDep, principal_id: PrincipalDep
-) -> list[IntentOut]:
+def list_my_intents(repos: ReposDep, principal_id: PrincipalDep) -> list[IntentOut]:
     """本人的全部意图，含念头。
 
     念头只出现在这里——系统里没有任何端点会返回**别人的**念头。
     """
-    signals = IntentRepository(conn, clock, campus).list_for_principal(principal_id)
+    signals = repos.intents.list_for_principal(principal_id)
     return [IntentOut.of(s) for s in signals]

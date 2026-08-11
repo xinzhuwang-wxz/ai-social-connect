@@ -137,27 +137,6 @@ class OpportunityRepository:
         seats = self._seats_of([r.id for r in rows])
         return [self._hydrate(r, seats) for r in rows]
 
-    def total_gap(self) -> int:
-        """整个租户还缺多少人。流动性观测用。"""
-        return (
-            self._conn.execute(
-                sa.select(
-                    sa.func.coalesce(
-                        sa.func.sum(
-                            opportunity_seats.c.capacity - opportunity_seats.c.filled
-                        ),
-                        0,
-                    )
-                )
-                .select_from(opportunity_seats)
-                .join(
-                    action_opportunities,
-                    action_opportunities.c.id == opportunity_seats.c.opportunity_id,
-                )
-                .where(action_opportunities.c.state == OpportunityState.OPEN)
-            ).scalar_one()
-            or 0
-        )
 
     def _seats_of(self, ids: list[UUID]) -> dict[UUID, list[Seat]]:
         rows = self._conn.execute(

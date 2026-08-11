@@ -12,8 +12,6 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from cofield.adapters.persistence.consent import ConsentRepository, EnvelopeRepository
-from cofield.adapters.persistence.intents import IntentRepository
 from cofield.domain.model.consent import (
     GRANTABLE_FIELDS,
     Audience,
@@ -25,7 +23,7 @@ from cofield.domain.model.consent import (
     Purpose,
 )
 from cofield.domain.model.intent import IntentContent
-from cofield.http.deps import CampusDep, ClockDep, ConnDep, PrincipalDep
+from cofield.http.deps import ClockDep, PrincipalDep, ReposDep
 
 router = APIRouter(tags=["envelopes"])
 
@@ -145,14 +143,14 @@ def _out(envelope: MatchEnvelope, consent_id: UUID | None = None) -> EnvelopeOut
 
 @router.get("/intents/{intent_id}/grantable-fields", response_model=list[GrantableFieldOut])
 def grantable_fields(
-    intent_id: UUID, conn: ConnDep, clock: ClockDep, campus: CampusDep
+    intent_id: UUID, repos: ReposDep
 ) -> list[GrantableFieldOut]:
     """这次可以逐项授权的字段。
 
     空字段也列出来但标 `present=false`——界面据此把它们灰掉，
     而不是让用户对着一个没内容的开关犹豫。
     """
-    signal = IntentRepository(conn, clock, campus).get(intent_id)
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
     return [
@@ -169,16 +167,15 @@ def grantable_fields(
 def put_envelope(
     intent_id: UUID,
     payload: PutEnvelopeRequest,
-    conn: ConnDep,
+    repos: ReposDep,
     clock: ClockDep,
-    campus: CampusDep,
     principal_id: PrincipalDep,
 ) -> EnvelopeOut:
     """保存这次的授权，并留下一条同意记录。
 
     信封会被撤销和过期；同意记录只追加不修改——申诉和导出看的是后者。
     """
-    signal = IntentRepository(conn, clock, campus).get(intent_id)
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
     if signal.principal_id != principal_id:
@@ -201,7 +198,7 @@ def put_envelope(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    envelopes = EnvelopeRepository(conn, clock, campus)
+    envelopes = repos.envelopes
     existing = envelopes.for_intent(intent_id)
     envelope = MatchEnvelope(
         id=existing.id if existing else uuid4(),
@@ -228,7 +225,7 @@ def put_envelope(
         retention_until=envelope.expires_at,
         events=(ConsentEvent(ConsentEventKind.GIVEN, now),),
     )
-    ConsentRepository(conn, clock, campus).append(record)
+    repos.consent.append(record)
 
     return _out(envelope, record.record_id)
 
@@ -236,13 +233,11 @@ def put_envelope(
 @router.post("/envelopes/{envelope_id}:revoke", response_model=EnvelopeOut)
 def revoke_envelope(
     envelope_id: UUID,
-    conn: ConnDep,
-    clock: ClockDep,
-    campus: CampusDep,
+    repos: ReposDep,
     principal_id: PrincipalDep,
 ) -> EnvelopeOut:
     """收回授权。撤销后新请求立刻被拒，不用等任何异步清理。"""
-    envelopes = EnvelopeRepository(conn, clock, campus)
+    envelopes = repos.envelopes
     envelope = envelopes.get(envelope_id)
     if envelope is None:
         raise HTTPException(status_code=404, detail="找不到这次授权")
@@ -254,28 +249,24 @@ def revoke_envelope(
 
 
 @router.get("/me/grants", response_model=list[EnvelopeOut])
-def my_grants(
-    conn: ConnDep, clock: ClockDep, campus: CampusDep, principal_id: PrincipalDep
-) -> list[EnvelopeOut]:
+def my_grants(repos: ReposDep, principal_id: PrincipalDep) -> list[EnvelopeOut]:
     """「谁能看到我」。仍在生效的授权，可一键收回。"""
-    found = EnvelopeRepository(conn, clock, campus).list_active(principal_id)
+    found = repos.envelopes.list_active(principal_id)
     return [_out(e) for e in found]
 
 
 @router.get("/intents/{intent_id}/preview", response_model=PreviewOut)
-def preview(
-    intent_id: UUID, conn: ConnDep, clock: ClockDep, campus: CampusDep
-) -> PreviewOut:
+def preview(intent_id: UUID, repos: ReposDep, clock: ClockDep) -> PreviewOut:
     """别人在小队说明里会看到我的什么。
 
     投影按信封求出的可见字段集合做——和真正对外输出走的是同一条路径，
     所以这一屏显示什么，对方就真的只看到什么。
     """
-    signal = IntentRepository(conn, clock, campus).get(intent_id)
+    signal = repos.intents.get(intent_id)
     if signal is None:
         raise HTTPException(status_code=404, detail="找不到这条需求")
 
-    envelope = EnvelopeRepository(conn, clock, campus).for_intent(intent_id)
+    envelope = repos.envelopes.for_intent(intent_id)
     if envelope is None:
         # 还没授权 = 什么都不给看。默认拒绝。
         return PreviewOut(visible={}, withheld=sorted(_FIELD_LABELS.values()))

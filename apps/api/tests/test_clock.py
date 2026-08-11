@@ -35,14 +35,6 @@ def test_simulated_clock_advances_without_sleeping() -> None:
     assert clock.now() == AWARE + timedelta(days=14)
 
 
-def test_simulated_clock_can_jump_to_an_instant() -> None:
-    clock = SimulatedClock(AWARE)
-    target = AWARE + timedelta(hours=6)
-
-    clock.advance_to(target)
-
-    assert clock.now() == target
-
 
 def test_simulated_clock_refuses_to_run_backwards() -> None:
     """时间倒流会让有效期与过期判断变得不可推理，所以直接禁掉。"""
@@ -50,8 +42,6 @@ def test_simulated_clock_refuses_to_run_backwards() -> None:
 
     with pytest.raises(ValueError, match="不能倒流"):
         clock.advance(timedelta(seconds=-1))
-    with pytest.raises(ValueError, match="不能倒流"):
-        clock.advance_to(AWARE - timedelta(seconds=1))
 
 
 def test_frozen_clock_never_moves() -> None:

@@ -15,14 +15,9 @@ from uuid import UUID
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from cofield.adapters.persistence.intents import IntentRepository
-from cofield.adapters.persistence.opportunities import (
-    OpportunityRepository,
-    OrganizationRepository,
-)
 from cofield.domain.model.intent import IntentState
 from cofield.domain.model.opportunity import ActionOpportunity
-from cofield.http.deps import CampusDep, ClockDep, ConnDep, PrincipalDep
+from cofield.http.deps import PrincipalDep, ReposDep
 
 router = APIRouter(tags=["stash"])
 
@@ -71,27 +66,25 @@ def _terms(goal: str, needs: tuple[str, ...], offers: tuple[str, ...]) -> set[st
 
 
 @router.get("/me/stash-hints", response_model=list[StashHintOut])
-def stash_hints(
-    conn: ConnDep, clock: ClockDep, campus: CampusDep, principal_id: PrincipalDep
-) -> list[StashHintOut]:
+def stash_hints(repos: ReposDep, principal_id: PrincipalDep) -> list[StashHintOut]:
     """我记下的念头，以及现在有哪些招募对得上。
 
     出现在本人的入口页，不产生推送。
     """
-    stashed = IntentRepository(conn, clock, campus).list_for_principal(
+    stashed = repos.intents.list_for_principal(
         principal_id, states={IntentState.STASHED}
     )
     if not stashed:
         return []
 
-    opportunities = OpportunityRepository(conn, clock, campus).list_open()
+    opportunities = repos.opportunities.list_open()
     if not opportunities:
         return [
             StashHintOut(intent_id=s.id, note=s.content.goal, hints=[])
             for s in stashed
         ]
 
-    orgs = {o.id: o for o in OrganizationRepository(conn, clock, campus).list_all()}
+    orgs = {o.id: o for o in repos.organizations.list_all()}
 
     result: list[StashHintOut] = []
     for signal in stashed:

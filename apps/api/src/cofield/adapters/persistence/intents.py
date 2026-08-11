@@ -137,14 +137,3 @@ class IntentRepository:
         ).all()
         return [_to_domain(r) for r in rows]
 
-    def expire_overdue(self, *, now: datetime | None = None) -> int:
-        """把到期的活跃意图标记为过期。返回处理条数。"""
-        instant = now or self._clock.now()
-        result = self._conn.execute(
-            sa.update(intent_signals)
-            .where(intent_signals.c.state == IntentState.ACTIVE.value)
-            .where(intent_signals.c.expires_at.is_not(None))
-            .where(intent_signals.c.expires_at <= instant)
-            .values(state=IntentState.EXPIRED.value)
-        )
-        return result.rowcount

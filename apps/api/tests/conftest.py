@@ -9,13 +9,17 @@ from __future__ import annotations
 import os
 from collections.abc import Generator
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import Engine
 
-from cofield.adapters.clock import FrozenClock
+if TYPE_CHECKING:
+    from fastapi.testclient import TestClient
+
+from cofield.adapters.clock import FrozenClock, SimulatedClock
 from cofield.adapters.persistence.engine import build_engine, owner_connection
 
 REPO_API_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -82,3 +86,67 @@ def _clean_tables(request: pytest.FixtureRequest) -> Generator[None, None, None]
                 "action_opportunities, organizations, intent_signals, principals"
             )
         )
+
+
+# --- 端到端用例的共用装配 ---------------------------------------------------
+# 四个测试文件曾各自定义过一份几乎相同的 client/me/seed。它们从来不会不一致，
+# 但一致性是靠人记住的——挪到这里之后，改一次身份注入方式只改一处。
+
+CAMPUS = "demo-campus"
+SIM_CAMPUS = "simulation"
+
+
+@pytest.fixture
+def sim_clock() -> SimulatedClock:
+    from cofield.adapters.clock import SimulatedClock as _Sim
+
+    return _Sim(FIXED_NOW)
+
+
+@pytest.fixture
+def seed_principal(engine: Engine):  # type: ignore[no-untyped-def]
+    """造一个主体。默认真人；`synthetic=True` 造合成主体。"""
+    from uuid import uuid4
+
+    from cofield.adapters.clock import SimulatedClock as _Sim
+    from cofield.adapters.persistence.engine import campus_connection
+    from cofield.adapters.persistence.principals import PrincipalRepository
+    from cofield.domain.model.principal import CampusId, Principal
+
+    def make(
+        *, campus: str = CAMPUS, name: str = "林知遥", synthetic: bool = False
+    ) -> Principal:
+        person = Principal(
+            id=uuid4(),
+            campus_id=CampusId(campus),
+            display_name=name,
+            is_synthetic=synthetic,
+        )
+        with campus_connection(engine, campus) as conn:
+            PrincipalRepository(conn, _Sim(FIXED_NOW)).add(person)
+        return person
+
+    return make
+
+
+@pytest.fixture
+def me(seed_principal):  # type: ignore[no-untyped-def]
+    return seed_principal()
+
+
+@pytest.fixture
+def client(  # type: ignore[no-untyped-def]
+    engine: Engine, me, sim_clock: SimulatedClock
+) -> Generator[TestClient, None, None]:
+    """带身份与租户的客户端，跑在可推进的时钟上。"""
+    from fastapi.testclient import TestClient as _Client
+
+    from cofield.http import deps
+    from cofield.http.app import create_app
+
+    app = create_app()
+    app.state.clock = sim_clock
+    app.dependency_overrides[deps.get_engine] = lambda: engine
+    with _Client(app) as c:
+        c.headers.update({"X-Principal-Id": str(me.id), "X-Campus-Id": CAMPUS})
+        yield c

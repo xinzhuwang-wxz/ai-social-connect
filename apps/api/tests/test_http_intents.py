@@ -6,18 +6,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
 from cofield.adapters.clock import SimulatedClock
-from cofield.adapters.persistence.engine import campus_connection
-from cofield.adapters.persistence.principals import PrincipalRepository
-from cofield.domain.model.principal import CampusId, Principal
 from cofield.http import deps
 from cofield.http.app import create_app
 
@@ -27,33 +22,6 @@ CANONICAL = (
     "我想做一个关于校园流浪猫的一分钟短片，周五前完成。"
     "我会写脚本，但不认识会拍摄和剪辑的人。"
 )
-
-
-@pytest.fixture
-def me(engine: Engine) -> Principal:
-    person = Principal(
-        id=uuid4(), campus_id=CampusId(CAMPUS), display_name="林知遥"
-    )
-    with campus_connection(engine, CAMPUS) as conn:
-        PrincipalRepository(conn, SimulatedClock(NOW)).add(person)
-    return person
-
-
-@pytest.fixture
-def sim_clock() -> SimulatedClock:
-    return SimulatedClock(NOW)
-
-
-@pytest.fixture
-def client(
-    engine: Engine, me: Principal, sim_clock: SimulatedClock
-) -> Generator[TestClient, None, None]:
-    app = create_app()
-    app.state.clock = sim_clock
-    app.dependency_overrides[deps.get_engine] = lambda: engine
-    with TestClient(app) as c:
-        c.headers.update({"X-Principal-Id": str(me.id), "X-Campus-Id": CAMPUS})
-        yield c
 
 
 def _create(client: TestClient, compiled: dict, expression: str = CANONICAL) -> dict:

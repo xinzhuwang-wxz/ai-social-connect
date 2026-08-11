@@ -16,7 +16,6 @@ from sqlalchemy import Engine
 from cofield.adapters.clock import SimulatedClock
 from cofield.adapters.persistence.engine import campus_connection
 from cofield.adapters.persistence.opportunities import OrganizationRepository
-from cofield.adapters.persistence.principals import PrincipalRepository
 from cofield.domain.model.opportunity import Organization
 from cofield.domain.model.principal import CampusId, Principal
 from cofield.http import deps
@@ -24,14 +23,6 @@ from cofield.http.app import create_app
 
 NOW = datetime(2026, 8, 12, 9, 0, tzinfo=UTC)
 CAMPUS = "demo-campus"
-
-
-@pytest.fixture
-def me(engine: Engine) -> Principal:
-    person = Principal(id=uuid4(), campus_id=CampusId(CAMPUS), display_name="林知遥")
-    with campus_connection(engine, CAMPUS) as conn:
-        PrincipalRepository(conn, SimulatedClock(NOW)).add(person)
-    return person
 
 
 @pytest.fixture

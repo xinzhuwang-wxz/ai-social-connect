@@ -115,22 +115,6 @@ def test_the_pool_shrinks_as_the_clock_advances(engine: Engine) -> None:
         assert IntentRepository(conn, clock, REAL).list_matchable() == []
 
 
-def test_expiring_overdue_intents_is_idempotent(engine: Engine) -> None:
-    owner = _seed_principal(engine, REAL)
-    clock = SimulatedClock(NOW)
-    active = _intent(owner, deadline=NOW + timedelta(days=1)).confirm(now=NOW, ttl=TTL)
-
-    with campus_connection(engine, REAL) as conn:
-        IntentRepository(conn, clock, REAL).save(active)
-
-    clock.advance(timedelta(days=2))
-
-    with campus_connection(engine, REAL) as conn:
-        repo = IntentRepository(conn, clock, REAL)
-        assert repo.expire_overdue() == 1
-        assert repo.expire_overdue() == 0
-        stored = repo.get(active.id)
-        assert stored is not None and stored.state is IntentState.EXPIRED
 
 
 def test_saving_twice_updates_rather_than_duplicates(engine: Engine) -> None:

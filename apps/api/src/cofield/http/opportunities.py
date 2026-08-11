@@ -12,12 +12,8 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from cofield.adapters.persistence.opportunities import (
-    OpportunityRepository,
-    OrganizationRepository,
-)
 from cofield.domain.model.opportunity import ActionOpportunity, Seat, publishable
-from cofield.http.deps import CampusDep, ClockDep, ConnDep, KindsDep, PrincipalDep
+from cofield.http.deps import ClockDep, KindsDep, PrincipalDep, ReposDep
 
 router = APIRouter(tags=["opportunities"])
 
@@ -86,12 +82,10 @@ def _out(
 
 
 @router.get("/opportunities", response_model=list[OpportunityOut])
-def list_opportunities(
-    conn: ConnDep, clock: ClockDep, campus: CampusDep
-) -> list[OpportunityOut]:
+def list_opportunities(repos: ReposDep) -> list[OpportunityOut]:
     """还能报名的招募。已满和已过期的不出现——列表上每一条都该能点。"""
-    orgs = {o.id: o for o in OrganizationRepository(conn, clock, campus).list_all()}
-    found = OpportunityRepository(conn, clock, campus).list_open()
+    orgs = {o.id: o for o in repos.organizations.list_all()}
+    found = repos.opportunities.list_open()
     return [
         _out(
             o,
@@ -105,14 +99,13 @@ def list_opportunities(
 @router.post("/opportunities", response_model=OpportunityOut, status_code=201)
 def create_opportunity(
     payload: CreateOpportunityRequest,
-    conn: ConnDep,
+    repos: ReposDep,
     clock: ClockDep,
-    campus: CampusDep,
     kinds: KindsDep,
     principal_id: PrincipalDep,
 ) -> OpportunityOut:
     """发布招募。发布者即负责人——没有负责人的成局会导致责任分散。"""
-    org = OrganizationRepository(conn, clock, campus).get(payload.organization_id)
+    org = repos.organizations.get(payload.organization_id)
     if org is None:
         raise HTTPException(status_code=404, detail="找不到这个组织")
 
@@ -144,19 +137,17 @@ def create_opportunity(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    OpportunityRepository(conn, clock, campus).add(opportunity)
+    repos.opportunities.add(opportunity)
     return _out(opportunity, org.name, org.verified)
 
 
 @router.get("/organizations/{organization_id}/opportunities", response_model=list[OpportunityOut])
 def list_for_organization(
-    organization_id: UUID, conn: ConnDep, clock: ClockDep, campus: CampusDep
+    organization_id: UUID, repos: ReposDep
 ) -> list[OpportunityOut]:
     """组织者侧：含已满与已关闭的，他们要看全貌才知道要不要补推。"""
-    org = OrganizationRepository(conn, clock, campus).get(organization_id)
+    org = repos.organizations.get(organization_id)
     if org is None:
         raise HTTPException(status_code=404, detail="找不到这个组织")
-    found = OpportunityRepository(conn, clock, campus).list_for_organization(
-        organization_id
-    )
+    found = repos.opportunities.list_for_organization(organization_id)
     return [_out(o, org.name, org.verified) for o in found]

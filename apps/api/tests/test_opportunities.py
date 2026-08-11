@@ -6,33 +6,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 
 from cofield.adapters.clock import SimulatedClock
 from cofield.adapters.persistence.engine import campus_connection
 from cofield.adapters.persistence.opportunities import OrganizationRepository
-from cofield.adapters.persistence.principals import PrincipalRepository
 from cofield.domain.model.opportunity import Organization
 from cofield.domain.model.principal import CampusId, Principal
-from cofield.http import deps
-from cofield.http.app import create_app
 
 NOW = datetime(2026, 8, 12, 9, 0, tzinfo=UTC)
 CAMPUS = "demo-campus"
-
-
-@pytest.fixture
-def steward(engine: Engine) -> Principal:
-    person = Principal(id=uuid4(), campus_id=CampusId(CAMPUS), display_name="社长")
-    with campus_connection(engine, CAMPUS) as conn:
-        PrincipalRepository(conn, SimulatedClock(NOW)).add(person)
-    return person
 
 
 def _org(engine: Engine, *, verified: bool) -> Organization:
@@ -45,18 +32,6 @@ def _org(engine: Engine, *, verified: bool) -> Organization:
     with campus_connection(engine, CAMPUS) as conn:
         OrganizationRepository(conn, SimulatedClock(NOW), CAMPUS).add(org)
     return org
-
-
-@pytest.fixture
-def client(
-    engine: Engine, steward: Principal
-) -> Generator[TestClient, None, None]:
-    app = create_app()
-    app.state.clock = SimulatedClock(NOW)
-    app.dependency_overrides[deps.get_engine] = lambda: engine
-    with TestClient(app) as c:
-        c.headers.update({"X-Principal-Id": str(steward.id), "X-Campus-Id": CAMPUS})
-        yield c
 
 
 def _payload(org: Organization, **over: object) -> dict:
@@ -136,7 +111,7 @@ def test_gaps_are_reported_per_role(client: TestClient, engine: Engine) -> None:
 
 
 def test_the_publisher_becomes_the_steward(
-    client: TestClient, engine: Engine, steward: Principal
+    client: TestClient, engine: Engine, me: Principal
 ) -> None:
     """没有负责人的成局会导致责任分散，所以发布者即负责人。"""
     org = _org(engine, verified=True)
@@ -147,7 +122,7 @@ def test_the_publisher_becomes_the_steward(
 
         found = OpportunityRepository(conn, SimulatedClock(NOW), CAMPUS).list_open()
 
-    assert found[0].steward_id == steward.id
+    assert found[0].steward_id == me.id
 
 
 def test_an_unregistered_action_kind_is_refused(client: TestClient, engine: Engine) -> None:

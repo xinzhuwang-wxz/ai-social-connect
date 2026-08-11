@@ -25,13 +25,6 @@ class SimulatedClock:
         self._instant += delta
         return self._instant
 
-    def advance_to(self, instant: datetime) -> datetime:
-        target = _require_aware(instant)
-        if target < self._instant:
-            raise ValueError("仿真时钟不能倒流")
-        self._instant = target
-        return self._instant
-
 
 def _require_aware(value: datetime) -> datetime:
     if value.tzinfo is None:

@@ -169,15 +169,3 @@ class ConsentRecord:
 
     # Events：只追加，不修改。撤销是追加一条 withdrawn，不是改写 given。
     events: tuple[ConsentEvent, ...] = ()
-
-    def withdrawn_at(self) -> datetime | None:
-        for event in reversed(self.events):
-            if event.kind is ConsentEventKind.WITHDRAWN:
-                return event.occurred_at
-        return None
-
-    def with_withdrawal(self, *, at: datetime) -> ConsentRecord:
-        return replace(
-            self,
-            events=(*self.events, ConsentEvent(ConsentEventKind.WITHDRAWN, at)),
-        )

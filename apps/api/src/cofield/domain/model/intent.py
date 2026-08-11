@@ -49,12 +49,6 @@ class TimeWindow:
         if self.deadline < self.earliest:
             raise ValueError("截止时间不能早于开始时间")
 
-    def contains(self, instant: datetime) -> bool:
-        return self.earliest <= instant <= self.deadline
-
-    def overlaps(self, other: TimeWindow) -> bool:
-        return self.earliest <= other.deadline and other.earliest <= self.deadline
-
 
 @dataclass(frozen=True, slots=True)
 class TeamSize:

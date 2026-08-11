@@ -16,6 +16,7 @@ from sqlalchemy import Connection, Engine
 from cofield.adapters.clock import SystemClock
 from cofield.adapters.extraction import RuleIntentExtractor
 from cofield.adapters.persistence.engine import build_engine, campus_connection
+from cofield.adapters.persistence.repositories import Repositories
 from cofield.catalog import registry as action_kinds
 from cofield.config import settings
 from cofield.domain.model.action_kind import ActionKindRegistry
@@ -84,9 +85,19 @@ def get_connection(
         yield conn
 
 
+def get_repositories(
+    conn: Annotated[Connection, Depends(get_connection)],
+    clock: Annotated[Clock, Depends(get_clock)],
+    campus: Annotated[str, Depends(get_campus)],
+) -> Repositories:
+    """端点依赖这一件东西，而不是连接、时钟、租户三件。"""
+    return Repositories(conn, clock, campus)
+
+
 CampusDep = Annotated[str, Depends(get_campus)]
 ClockDep = Annotated[Clock, Depends(get_clock)]
 ConnDep = Annotated[Connection, Depends(get_connection)]
 ExtractorDep = Annotated[IntentExtractor, Depends(get_extractor)]
 KindsDep = Annotated[ActionKindRegistry, Depends(get_action_kinds)]
 PrincipalDep = Annotated[UUID, Depends(get_principal_id)]
+ReposDep = Annotated[Repositories, Depends(get_repositories)]
