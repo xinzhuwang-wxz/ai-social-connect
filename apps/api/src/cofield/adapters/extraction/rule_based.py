@@ -14,6 +14,7 @@ import re
 from datetime import datetime, time, timedelta
 
 from cofield.domain.model.intent import IntentContent, TeamSize, TimeWindow
+from cofield.domain.model.skills import normalise
 from cofield.domain.ports.intent_extractor import (
     Extraction,
     FollowUpQuestion,
@@ -29,7 +30,10 @@ _OFFER_PATTERNS = [
 _NEED_PATTERNS = [
     # "不认识会拍摄和剪辑的人" —— 否定式表达的其实是需求，这是最常见的说法
     re.compile(r"不(?:认识|会|懂)(?:会)?([^，。；,;！!？?\n]{1,24})"),
-    re.compile(r"(?:缺|差|需要|想找|求|招)(?:一?个|几个|两个|三个)?([^，。；,;！!？?\n]{1,20})"),
+    re.compile(
+        r"(?:缺|差|需要|想找|要找|找|求|招|招募)"
+        r"(?:一?个|几个|两个|三个)?([^，。；,;！!？?\n]{1,20})"
+    ),
 ]
 _NOISE = re.compile(r"^(?:什么|谁|人|的|了|吗|呢)+$")
 #: 含这些词的短语说的是"一起做某事"，不是一个角色缺口。
@@ -68,9 +72,14 @@ class RuleIntentExtractor:
                 )
             )
 
-        offers = _collect(text, _OFFER_PATTERNS)
-        needs = _collect(text, _NEED_PATTERNS)
+        offers, _ = _collect(text, _OFFER_PATTERNS)
+        needs, needs_unclear = _collect(text, _NEED_PATTERNS)
         if not needs:
+            uncertain.add("needs")
+        elif needs_unclear:
+            # 认出来一部分，还有一部分说的东西结构化字段装不下。
+            # 标成"我猜的"让用户过目——他一眼就能看出漏了什么，
+            # 而系统自己永远猜不出那半句该归到哪个词上。
             uncertain.add("needs")
             follow_ups.append(
                 FollowUpQuestion(text="你最缺哪种人？", narrows="needs")
@@ -111,21 +120,47 @@ def _goal_of(text: str) -> str:
     return first or text[:40]
 
 
-def _collect(text: str, patterns: list[re.Pattern[str]]) -> tuple[str, ...]:
+def _collect(text: str, patterns: list[re.Pattern[str]]) -> tuple[tuple[str, ...], bool]:
+    """抽出角色缺口，**归一到平台认识的词表**。
+
+    返回（认出来的, 有没有没认出来的）。
+
+    ## 为什么必须归一
+
+    `needs` 直接喂给 SQL 的精确过滤。抽成「会剪辑」而不是「剪辑」，
+    这条需求就永远匹配不到人——而校园里明明有两百个人会剪辑。
+    静默是最坏的部分：没有报错，只是结果永远为空。
+
+    ## 没认出来的不丢
+
+    原话完整保留在 `raw_expression` 里，语义召回读的就是它。
+    「朋克风格文案」里的"朋克"本来就不在词表里，那一路正是为它准备的。
+    这一层要做的是**认出哪些属于结构化字段**，不是把所有东西都塞进去。
+
+    但要**让用户知道**只认出了一部分——所以第二个返回值会让 `needs`
+    被标成"我猜的"，界面上那个可编辑的徽标就是为这件事存在的。
+    """
     found: list[str] = []
+    missed = False
     for pattern in patterns:
         for raw in pattern.findall(text):
             phrase = _TRAILING.sub("", raw.strip(" 的和与、"))
             for part in _CONJUNCTION.split(phrase):
                 item = _TRAILING.sub("", part.strip(" 的和与、"))
-                if not item or _NOISE.match(item) or _NOT_A_ROLE.search(item):
+                if not item or _NOISE.match(item):
                     continue
-                if item in found:
+                skill = normalise(item)
+                if skill is not None:
+                    # 词表命中是强证据，压过"一起/组队"那条启发式——
+                    # "想找人一起做数据分析"里，数据分析确实是缺口。
+                    if skill not in found:
+                        found.append(skill)
                     continue
-                if len(item) > 12:  # 抓太长多半是把整句话卷进来了，宁可漏不可错
+                if _NOT_A_ROLE.search(item) or len(item) > 12:
                     continue
-                found.append(item)
-    return tuple(found)
+                # 认不出来的：不进 needs（进了也匹配不到人），但要留个记号。
+                missed = True
+    return tuple(found), missed
 
 
 def _parse_deadline(text: str, *, now: datetime) -> datetime | None:
