@@ -1,0 +1,16 @@
+{
+  "name": "cofield",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "dev": "docker compose up",
+    "test": "pnpm run test:api && pnpm run test:web",
+    "test:api": "cd apps/api && uv run pytest",
+    "test:web": "pnpm --filter web test",
+    "typecheck": "pnpm run typecheck:api && pnpm run typecheck:web",
+    "typecheck:api": "cd apps/api && uv run mypy src",
+    "typecheck:web": "pnpm --filter web typecheck",
+    "lint:domain-purity": "cd apps/api && uv run python ../../scripts/check_domain_purity.py",
+    "seed": "cd apps/api && uv run python -m cofield.cli seed"
+  }
+}

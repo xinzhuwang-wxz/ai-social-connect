@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: cofield
+      POSTGRES_PASSWORD: cofield
+      POSTGRES_DB: cofield
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cofield -d cofield"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      # PostgreSQL 18 起，卷要挂在 /var/lib/postgresql 而不是它的 data 子目录：
+      # 镜像把数据放进按主版本号命名的子目录，这样 pg_upgrade --link 不会
+      # 跨挂载点。挂到 /var/lib/postgresql/data 会让 18 的镜像启动即退出。
+      # https://github.com/docker-library/postgres/pull/1259
+      - dbdata:/var/lib/postgresql
+
+volumes:
+  dbdata:
