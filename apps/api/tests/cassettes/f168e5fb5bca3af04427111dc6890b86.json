@@ -1,0 +1,13 @@
+{
+  "kind": "proof_narration",
+  "model": "volcengine/doubao-seed-1-6-flash-250828",
+  "instruction": "给出接下来最该做的一件具体的事，一句话，不要客套。",
+  "facts": [
+    "周雨能补上缺的剪辑"
+  ],
+  "max_chars": 40,
+  "text": "因为周雨能补上缺的剪辑，接下来最该安排周雨开始剪辑。",
+  "grounded_in": [
+    "周雨能补上缺的剪辑"
+  ]
+}

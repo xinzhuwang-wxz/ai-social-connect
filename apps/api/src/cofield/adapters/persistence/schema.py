@@ -325,6 +325,13 @@ spaces = sa.Table(
     #: 助手开关。**关掉之后共域必须照常可用**——这是 M3 的判据之一。
     #: 助手是共域里的一张卡片，不是共域的运行时。
     sa.Column("agent_enabled", sa.Boolean, nullable=False, server_default=sa.true()),
+    #: 策略纪元。成员、提案、同意或策略一变就 +1，**旧能力令牌立刻失效**。
+    #:
+    #: 为什么不是给每张令牌设短过期就够：过期能挡住"很久以前发的令牌"，
+    #: 挡不住"三十秒前发的、但这三十秒里有人退出了"。撤销必须是即时的，
+    #: 而唯一即时的撤销手段是让所有旧令牌一起作废——单调计数器就够，
+    #: 不需要维护一张吊销名单。
+    sa.Column("policy_epoch", sa.Integer, nullable=False, server_default="1"),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
     sa.UniqueConstraint("event_id", name="uq_space_per_event"),
     sa.Index("ix_spaces_campus", "campus_id"),
