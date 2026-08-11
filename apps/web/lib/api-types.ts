@@ -302,6 +302,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/stash-hints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stash Hints
+         * @description 我记下的念头，以及现在有哪些招募对得上。
+         *
+         *     出现在本人的入口页，不产生推送。
+         */
+        get: operations["stash_hints_api_me_stash_hints_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -486,6 +508,24 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HintOut */
+        HintOut: {
+            /**
+             * Opportunity Id
+             * Format: uuid
+             */
+            opportunity_id: string;
+            /** Title */
+            title: string;
+            /** Organization Name */
+            organization_name: string;
+            /** Organization Verified */
+            organization_verified: boolean;
+            /** Because */
+            because: string;
+            /** Total Gap */
+            total_gap: number;
         };
         /**
          * IntentContentIn
@@ -674,6 +714,18 @@ export interface components {
              * @default []
              */
             roles: string[];
+        };
+        /** StashHintOut */
+        StashHintOut: {
+            /**
+             * Intent Id
+             * Format: uuid
+             */
+            intent_id: string;
+            /** Note */
+            note: string;
+            /** Hints */
+            hints: components["schemas"]["HintOut"][];
         };
         /** TeamSizeOut */
         TeamSizeOut: {
@@ -1231,6 +1283,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stash_hints_api_me_stash_hints_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StashHintOut"][];
                 };
             };
             /** @description Validation Error */

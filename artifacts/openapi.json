@@ -1014,6 +1014,76 @@
         }
       }
     },
+    "/api/me/stash-hints": {
+      "get": {
+        "tags": [
+          "stash"
+        ],
+        "summary": "Stash Hints",
+        "description": "我记下的念头，以及现在有哪些招募对得上。\n\n出现在本人的入口页，不产生推送。",
+        "operationId": "stash_hints_api_me_stash_hints_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StashHintOut"
+                  },
+                  "title": "Response Stash Hints Api Me Stash Hints Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -1418,6 +1488,45 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HintOut": {
+        "properties": {
+          "opportunity_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Opportunity Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "organization_name": {
+            "type": "string",
+            "title": "Organization Name"
+          },
+          "organization_verified": {
+            "type": "boolean",
+            "title": "Organization Verified"
+          },
+          "because": {
+            "type": "string",
+            "title": "Because"
+          },
+          "total_gap": {
+            "type": "integer",
+            "title": "Total Gap"
+          }
+        },
+        "type": "object",
+        "required": [
+          "opportunity_id",
+          "title",
+          "organization_name",
+          "organization_verified",
+          "because",
+          "total_gap"
+        ],
+        "title": "HintOut"
       },
       "IntentContentIn": {
         "properties": {
@@ -1864,6 +1973,33 @@
           "example"
         ],
         "title": "StarterOut"
+      },
+      "StashHintOut": {
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/HintOut"
+            },
+            "type": "array",
+            "title": "Hints"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent_id",
+          "note",
+          "hints"
+        ],
+        "title": "StashHintOut"
       },
       "TeamSizeOut": {
         "properties": {
