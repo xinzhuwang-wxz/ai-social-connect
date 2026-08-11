@@ -11,6 +11,8 @@
     "typecheck:api": "cd apps/api && uv run mypy src",
     "typecheck:web": "pnpm --filter web typecheck",
     "lint:domain-purity": "cd apps/api && uv run python ../../scripts/check_domain_purity.py",
-    "seed": "cd apps/api && uv run python -m cofield.cli seed"
+    "seed": "cd apps/api && uv run python -m cofield.cli seed",
+    "gen:api": "cd apps/api && uv run python ../../scripts/export_openapi.py && cd ../web && pnpm gen:api",
+    "check:contract": "pnpm gen:api && git diff --exit-code artifacts/openapi.json apps/web/lib/api-types.ts"
   }
 }

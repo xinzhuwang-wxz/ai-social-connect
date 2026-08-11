@@ -11,3 +11,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 dist/
+.next/
+next-env.d.ts
+*.tsbuildinfo

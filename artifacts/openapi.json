@@ -1,0 +1,1018 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "共域 CoField API",
+    "description": "以共同事件为核心的校园社交连接器。\n\n领域词汇见 CONTEXT.md；用户可见文案不使用这些词汇，映射见 docs/07。",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/action-kinds": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "List Action Kinds",
+        "description": "首屏的场景引子来源。\n\n新增一个行动类别时首屏自动多一张卡，前端不改代码——这是扩展点的\n可见证据。",
+        "operationId": "list_action_kinds_api_action_kinds_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ActionKindOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Action Kinds Api Action Kinds Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents:compile": {
+      "post": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Compile Intent",
+        "description": "把一句话整理成可检查的结构。**不写库。**",
+        "operationId": "compile_intent_api_intents_compile_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompileResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents": {
+      "post": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Create Intent",
+        "description": "保存用户校对后的意图。\n\n`stash=true` 存成念头：只对本人可见、不参与撮合、无过期压力。\n否则存成草稿，等用户确认。两者都还不能被撮合到。",
+        "operationId": "create_intent_api_intents_post",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIntentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Get Intent",
+        "operationId": "get_intent_api_intents__intent_id__get",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Revise Intent",
+        "description": "改内容。改完回到草稿——旧的确认不能沿用到新内容上。",
+        "operationId": "revise_intent_api_intents__intent_id__patch",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviseIntentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}:confirm": {
+      "post": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Confirm Intent",
+        "description": "用户确认结构化结果无误。这是\"未经确认不得进入撮合\"的那道门。",
+        "operationId": "confirm_intent_api_intents__intent_id__confirm_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}:withdraw": {
+      "post": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "Withdraw Intent",
+        "operationId": "withdraw_intent_api_intents__intent_id__withdraw_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/intents": {
+      "get": {
+        "tags": [
+          "intents"
+        ],
+        "summary": "List My Intents",
+        "description": "本人的全部意图，含念头。\n\n念头只出现在这里——系统里没有任何端点会返回**别人的**念头。",
+        "operationId": "list_my_intents_api_me_intents_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IntentOut"
+                  },
+                  "title": "Response List My Intents Api Me Intents Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "ops"
+        ],
+        "summary": "Health",
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionKindOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "starter": {
+            "$ref": "#/components/schemas/StarterOut"
+          },
+          "risk_tier": {
+            "type": "string",
+            "title": "Risk Tier"
+          },
+          "place_precision": {
+            "type": "string",
+            "title": "Place Precision"
+          },
+          "agent_reply_policy": {
+            "type": "string",
+            "title": "Agent Reply Policy"
+          },
+          "matching_window_seconds": {
+            "type": "integer",
+            "title": "Matching Window Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "starter",
+          "risk_tier",
+          "place_precision",
+          "agent_reply_policy",
+          "matching_window_seconds"
+        ],
+        "title": "ActionKindOut"
+      },
+      "CompileRequest": {
+        "properties": {
+          "expression": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expression"
+        ],
+        "title": "CompileRequest"
+      },
+      "CompileResponse": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/IntentContentOut"
+          },
+          "follow_ups": {
+            "items": {
+              "$ref": "#/components/schemas/FollowUpOut"
+            },
+            "type": "array",
+            "title": "Follow Ups",
+            "default": []
+          },
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictOut"
+            },
+            "type": "array",
+            "title": "Conflicts",
+            "default": []
+          },
+          "confidence": {
+            "type": "number",
+            "title": "Confidence"
+          },
+          "fall_back_to_form": {
+            "type": "boolean",
+            "title": "Fall Back To Form"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content",
+          "confidence",
+          "fall_back_to_form"
+        ],
+        "title": "CompileResponse",
+        "description": "抽取结果。**它只是草稿**——没有用户确认，什么都进不了撮合。"
+      },
+      "ConflictOut": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "detail"
+        ],
+        "title": "ConflictOut",
+        "description": "指出是哪两条约束打架，不泛泛说\"输入有误\"。"
+      },
+      "CreateIntentRequest": {
+        "properties": {
+          "expression": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression"
+          },
+          "content": {
+            "$ref": "#/components/schemas/IntentContentIn"
+          },
+          "stash": {
+            "type": "boolean",
+            "title": "Stash",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "expression",
+          "content"
+        ],
+        "title": "CreateIntentRequest"
+      },
+      "FollowUpOut": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "narrows": {
+            "type": "string",
+            "title": "Narrows"
+          },
+          "options": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Options",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "narrows"
+        ],
+        "title": "FollowUpOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IntentContentIn": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Goal"
+          },
+          "offers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Offers",
+            "default": []
+          },
+          "needs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs",
+            "default": []
+          },
+          "time_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeWindowOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Scope"
+          },
+          "team_size": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamSizeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "boundaries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Boundaries",
+            "default": []
+          },
+          "open_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Open Questions",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "title": "IntentContentIn",
+        "description": "用户校对后回传的内容。抽取给的是草稿，这才是权威。"
+      },
+      "IntentContentOut": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "offers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Offers",
+            "default": []
+          },
+          "needs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs",
+            "default": []
+          },
+          "time_window": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimeWindowOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Scope"
+          },
+          "team_size": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamSizeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "boundaries": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Boundaries",
+            "default": []
+          },
+          "open_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Open Questions",
+            "default": []
+          },
+          "uncertain_fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Uncertain Fields",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal"
+        ],
+        "title": "IntentContentOut"
+      },
+      "IntentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "principal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Principal Id"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "raw_expression": {
+            "type": "string",
+            "title": "Raw Expression"
+          },
+          "content": {
+            "$ref": "#/components/schemas/IntentContentOut"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "is_matchable": {
+            "type": "boolean",
+            "title": "Is Matchable"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "principal_id",
+          "state",
+          "raw_expression",
+          "content",
+          "created_at",
+          "is_matchable"
+        ],
+        "title": "IntentOut"
+      },
+      "ReviseIntentRequest": {
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/IntentContentIn"
+          }
+        },
+        "type": "object",
+        "required": [
+          "content"
+        ],
+        "title": "ReviseIntentRequest"
+      },
+      "StarterOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "example": {
+            "type": "string",
+            "title": "Example"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Roles",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "example"
+        ],
+        "title": "StarterOut"
+      },
+      "TeamSizeOut": {
+        "properties": {
+          "minimum": {
+            "type": "integer",
+            "title": "Minimum"
+          },
+          "maximum": {
+            "type": "integer",
+            "title": "Maximum"
+          }
+        },
+        "type": "object",
+        "required": [
+          "minimum",
+          "maximum"
+        ],
+        "title": "TeamSizeOut"
+      },
+      "TimeWindowOut": {
+        "properties": {
+          "earliest": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Earliest"
+          },
+          "deadline": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Deadline"
+          }
+        },
+        "type": "object",
+        "required": [
+          "earliest",
+          "deadline"
+        ],
+        "title": "TimeWindowOut"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
