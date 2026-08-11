@@ -78,14 +78,18 @@ def _clean_tables(request: pytest.FixtureRequest) -> Generator[None, None, None]
     import sqlalchemy as sa
 
     eng: Engine = request.getfixturevalue("engine")
+    # 模块级装载的合成人口不能被函数级清理冲掉——它装一次要 0.7 秒，
+    # 每个用例重装是浪费，而且会让"两万人上的漏斗"变成"每次都重来"。
+    keeps_population = "campus" in request.fixturenames
+    tables = (
+        "consent_records, match_envelopes, opportunity_seats, "
+        "action_opportunities, organizations, intent_signals"
+    )
+    if not keeps_population:
+        tables += ", principals"
     # 跨 campus 清表是属主的活儿——策略按 campus 过滤，应用角色做不到也不该做到。
     with owner_connection(eng) as conn:
-        conn.execute(
-            sa.text(
-                "TRUNCATE consent_records, match_envelopes, opportunity_seats, "
-                "action_opportunities, organizations, intent_signals, principals"
-            )
-        )
+        conn.execute(sa.text(f"TRUNCATE {tables} CASCADE"))
 
 
 # --- 端到端用例的共用装配 ---------------------------------------------------

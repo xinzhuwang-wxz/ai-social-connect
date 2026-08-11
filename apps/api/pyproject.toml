@@ -10,6 +10,9 @@ dependencies = [
     "sqlalchemy>=2.0",
     "psycopg[binary]>=3.2",
     "alembic>=1.14",
+    "networkx>=3.6.1",
+    "faker>=40.36.0",
+    "numpy>=2.5.2",
 ]
 
 [dependency-groups]
@@ -33,6 +36,11 @@ packages = ["src/cofield"]
 pythonpath = ["src"]
 testpaths = ["tests"]
 addopts = "-q"
+
+[[tool.mypy.overrides]]
+# networkx 没有官方 stub；它只在仿真人口生成里用，不进领域层。
+module = ["networkx.*"]
+ignore_missing_imports = true
 
 [tool.mypy]
 python_version = "3.12"

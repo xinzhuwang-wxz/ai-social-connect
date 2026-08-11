@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import ARRAY as PgArray
 
 metadata = sa.MetaData()
 
@@ -37,8 +38,21 @@ principals = sa.Table(
         sa.TIMESTAMP(timezone=True),
         nullable=False,
     ),
+    # --- 漏斗第一段用来做 SQL 硬过滤的列 ---
+    # 它们不是"合成人口专用"：真实用户同样有技能、空闲和校区。
+    sa.Column("major", sa.Text),
+    sa.Column("year", sa.Integer),
+    sa.Column("zone", sa.Text),
+    # 用方言 ARRAY 而不是通用 ARRAY：硬过滤要用 `&&` 重叠运算符，
+    # 通用类型没有这个比较器。生成的 DDL 相同。
+    sa.Column("skills", PgArray(sa.Text), nullable=False, server_default="{}"),
+    #: 21 位周课表掩码（7 天 × 上午/下午/晚上），1 表示有空。
+    #: 整组共同空闲 = 按位与。真正咬人的约束是"连续两段"而不是"任意一段"。
+    sa.Column("availability", sa.Text),
     sa.Index("ix_principals_campus", "campus_id"),
     sa.Index("ix_principals_campus_synthetic", "campus_id", "is_synthetic"),
+    sa.Index("ix_principals_skills", "skills", postgresql_using="gin"),
+    sa.Index("ix_principals_campus_zone", "campus_id", "zone"),
 )
 
 intent_signals = sa.Table(
