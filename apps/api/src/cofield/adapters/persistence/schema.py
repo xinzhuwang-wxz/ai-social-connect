@@ -229,8 +229,187 @@ formation_proposals = sa.Table(
     #: 仍然存下来，是为了让"这条不变量有没有被绕过"可被查询验证。
     sa.Column("stability_passed", sa.Boolean, nullable=False),
     sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    #: **实质条款的摘要。** 同意是对某一版条款的同意，不是对"这个提案"的
+    #: 永久授权——人选、角色、时间、地点任何一项变了，之前那句"我加入"
+    #: 就不再指向现在这件事。摘要变了旧承诺即失效，这是机器可判的，
+    #: 不靠"记得去清空"。
+    sa.Column("terms_digest", sa.Text, nullable=False, server_default=""),
+    #: 第几版。条件接受（「我可以，但……」）会生成新版本。
+    sa.Column("version", sa.Integer, nullable=False, server_default="1"),
+    #: 上一版。改条款是**新增一行**而不是改旧行——
+    #: 谁在哪一版上答应过什么，申诉时要查得出来。
+    sa.Column("supersedes", sa.Uuid),
+    #: 被新版取代或被撤回的时刻。非空即不再接受新的答复。
+    sa.Column("withdrawn_at", sa.TIMESTAMP(timezone=True)),
     sa.Index("ix_proposals_intent", "campus_id", "intent_id"),
     sa.Index("ix_proposals_cleared", "campus_id", "cleared_at"),
+)
+
+
+# --- 确认门与原子成局（#9）---
+
+#: 每个人对一个提案的答复。
+#:
+#: 它是**唯一**能让事件诞生的东西。AI 可以代为表达，但不能代为承诺——
+#: 所以这张表只接受真人签名的命令，没有任何自动写入的路径。
+commitments = sa.Table(
+    "commitments",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("proposal_id", sa.Uuid, nullable=False),
+    sa.Column("principal_id", sa.Uuid, nullable=False),
+    #: pending / accepted / declined / conditional
+    #: `conditional` 是「我可以，但……」——它**不是**同意，
+    #: 门槛不认它。少了这一档，想参与但有顾虑的人只能被迫二选一。
+    sa.Column("state", sa.Text, nullable=False, server_default="pending"),
+    #: 有条件接受时那句话的原文。系统不解析它，只把它带给别人看。
+    sa.Column("condition", sa.Text),
+    sa.Column("decided_at", sa.TIMESTAMP(timezone=True)),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("expires_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    # 一个人对一个提案只能有一条答复。改主意是改这一行，不是追加。
+    sa.UniqueConstraint("proposal_id", "principal_id", name="uq_commitment_person"),
+    sa.Index("ix_commitments_proposal", "campus_id", "proposal_id"),
+    sa.Index("ix_commitments_principal", "campus_id", "principal_id"),
+)
+
+#: 共同事件。**全员确认之后才诞生，在一个事务里。**
+#:
+#: 达不到门槛什么都不产生——不是"先建一个草稿事件再慢慢凑人"。
+#: 半成品事件会让参与者以为已经成了，而这正是这个产品最不该犯的错。
+shared_events = sa.Table(
+    "shared_events",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("proposal_id", sa.Uuid, nullable=False),
+    sa.Column("action_kind", sa.Text),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("goal", sa.Text, nullable=False),
+    # 必须有真人负责人：没有负责人的自动成局会导致责任分散。
+    sa.Column("steward_id", sa.Uuid, nullable=False),
+    sa.Column("formed_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("deadline", sa.TIMESTAMP(timezone=True)),
+    #: active / completed / abandoned
+    sa.Column("state", sa.Text, nullable=False, server_default="active"),
+    # 一个提案最多变成一个事件。重复提交确认不该产生第二个。
+    sa.UniqueConstraint("proposal_id", name="uq_event_per_proposal"),
+    sa.Index("ix_events_campus_state", "campus_id", "state"),
+)
+
+event_members = sa.Table(
+    "event_members",
+    metadata,
+    sa.Column("event_id", sa.Uuid, primary_key=True),
+    sa.Column("principal_id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("role", sa.Text),
+    sa.Column("joined_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    #: 中途退出的人留在表里但标记时刻——关系边不能凭空消失，
+    #: 否则「谁参加过什么」这件事就没有可信来源了。
+    sa.Column("left_at", sa.TIMESTAMP(timezone=True)),
+    sa.Index("ix_members_principal", "campus_id", "principal_id"),
+)
+
+# --- 共域（#10）---
+
+#: 事件的空间。一个事件一个，不是群聊。
+spaces = sa.Table(
+    "spaces",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("event_id", sa.Uuid, nullable=False),
+    sa.Column("name", sa.Text, nullable=False),
+    #: 助手开关。**关掉之后共域必须照常可用**——这是 M3 的判据之一。
+    #: 助手是共域里的一张卡片，不是共域的运行时。
+    sa.Column("agent_enabled", sa.Boolean, nullable=False, server_default=sa.true()),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.UniqueConstraint("event_id", name="uq_space_per_event"),
+    sa.Index("ix_spaces_campus", "campus_id"),
+)
+
+#: 共域里的一条东西：任务、素材、决策门、记录。
+#:
+#: 用 `kind` 区分而不是四张表——新增一种条目应该是新增一条声明，
+#: 不是新增一张表加一套 CRUD。这和行动类别注册表是同一个扩展点思路。
+space_items = sa.Table(
+    "space_items",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("space_id", sa.Uuid, nullable=False),
+    #: task / material / decision_gate / note
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("title", sa.Text, nullable=False),
+    sa.Column("body", sa.Text),
+    #: 各 kind 自己的状态：任务是 todo/doing/done，决策门是 open/settled。
+    sa.Column("state", sa.Text, nullable=False, server_default="open"),
+    sa.Column("assignee_id", sa.Uuid),
+    sa.Column("due_at", sa.TIMESTAMP(timezone=True)),
+    #: 是不是助手起草的。**必须能看出来**——AI 起草、人类决定，
+    #: 分不清谁写的，"人类决定"就只是一句话。
+    sa.Column("drafted_by_agent", sa.Boolean, nullable=False, server_default=sa.false()),
+    #: 助手起草的东西在被真人采纳之前不算数。
+    sa.Column("accepted_by", sa.Uuid),
+    sa.Column("created_by", sa.Uuid, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("extras", sa.JSON, nullable=False, server_default="{}"),
+    sa.Index("ix_items_space_kind", "campus_id", "space_id", "kind"),
+)
+
+# --- 受限协商（#8）---
+
+#: 一次协商，持久化的是 A2A 的 Task 生命周期（见 ADR 0004）。
+#:
+#: 复用它是因为 A2A 有两个**非终止的中断态**——`INPUT_REQUIRED` 与
+#: `AUTH_REQUIRED`——语义正是"交还给真人"。自研一个语义相同的状态机
+#: 既是重复造轮子，也会让将来接第三方个人代理时多一层翻译。
+negotiation_tasks = sa.Table(
+    "negotiation_tasks",
+    metadata,
+    #: A2A 的 taskId。用文本而不是 UUID：协议里它是字符串，
+    #: 将来对接外部代理时不该由我们规定它长什么样。
+    sa.Column("task_id", sa.Text, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    #: A2A 的 contextId。同一次成局的多轮协商共享它。
+    sa.Column("context_id", sa.Text, nullable=False),
+    sa.Column("proposal_id", sa.Uuid, nullable=False),
+    #: A2A TaskState 的取值，原样存，不翻译成我们自己的词。
+    sa.Column("state", sa.Text, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_negotiation_proposal", "campus_id", "proposal_id"),
+    sa.Index("ix_negotiation_context", "campus_id", "context_id"),
+)
+
+#: 协商里的一条消息。**七种受限类型，没有一种构成同意。**
+#:
+#: 自由格式协商是攻击面：实证显示 agent 易受提示注入，且选择过载与
+#: 首提案偏差会让"回得快"打败"最合适"。所以消息是结构化载荷，
+#: 装在 A2A 的 `Message.parts` 里，不是另一套协议。
+negotiation_messages = sa.Table(
+    "negotiation_messages",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("task_id", sa.Text, nullable=False),
+    sa.Column("author_id", sa.Uuid, nullable=False),
+    #: A2A 的 Message.role：user / agent。作者是人还是 agent
+    #: 在协议层就有位置，不需要另加字段。
+    sa.Column("role", sa.Text, nullable=False),
+    #: 七种受限消息类型之一。
+    sa.Column("kind", sa.Text, nullable=False),
+    sa.Column("payload", sa.JSON, nullable=False),
+    #: 代聊三档：本人 / AI 起草本人过目 / AI 代答。
+    #: 是否向对方披露由行动类别注册表的 `agent_reply_policy` 决定，
+    #: 是可配置策略不是不变量——但**记录下来是不变量**，
+    #: 申诉时要能查出这句话到底是谁说的。
+    sa.Column("speaker_mode", sa.Text, nullable=False, server_default="self"),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_messages_task", "campus_id", "task_id", "created_at"),
 )
 
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
@@ -244,4 +423,11 @@ RLS_TABLES: tuple[str, ...] = (
     "consent_records",
     "semantic_index",
     "formation_proposals",
+    "commitments",
+    "shared_events",
+    "event_members",
+    "spaces",
+    "space_items",
+    "negotiation_tasks",
+    "negotiation_messages",
 )
