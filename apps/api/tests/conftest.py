@@ -76,4 +76,4 @@ def _clean_tables(request: pytest.FixtureRequest) -> Generator[None, None, None]
     eng: Engine = request.getfixturevalue("engine")
     # 跨 campus 清表是属主的活儿——策略按 campus 过滤，应用角色做不到也不该做到。
     with owner_connection(eng) as conn:
-        conn.execute(sa.text("TRUNCATE principals"))
+        conn.execute(sa.text("TRUNCATE principals, intent_signals"))

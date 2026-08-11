@@ -41,5 +41,37 @@ principals = sa.Table(
     sa.Index("ix_principals_campus_synthetic", "campus_id", "is_synthetic"),
 )
 
+intent_signals = sa.Table(
+    "intent_signals",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("principal_id", sa.Uuid, nullable=False),
+    sa.Column("state", sa.Text, nullable=False),
+    # 用户说的原话永远保留：抽取错了能追溯，也能拿去改进抽取器。
+    sa.Column("raw_expression", sa.Text, nullable=False),
+    sa.Column("goal", sa.Text, nullable=False),
+    # 硬约束提升为真列而不是塞进 JSONB——漏斗第一段要用 SQL 过滤它们，
+    # 而且它们要建索引。可扩展的部分放 extras。
+    sa.Column("earliest", sa.TIMESTAMP(timezone=True)),
+    sa.Column("deadline", sa.TIMESTAMP(timezone=True)),
+    sa.Column("location_scope", sa.Text),
+    sa.Column("team_min", sa.Integer),
+    sa.Column("team_max", sa.Integer),
+    sa.Column("offers", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
+    sa.Column("needs", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
+    sa.Column("boundaries", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
+    sa.Column("open_questions", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
+    sa.Column("uncertain_fields", sa.ARRAY(sa.Text), nullable=False, server_default="{}"),
+    #: 行动类别注册表声明的扩展字段。新增类别不改表结构。
+    sa.Column("extras", sa.JSON, nullable=False, server_default="{}"),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("expires_at", sa.TIMESTAMP(timezone=True)),
+    sa.Index("ix_intents_campus_state", "campus_id", "state"),
+    # 撮合窗口按截止期排序取"即将离开市场"的人，这个索引服务那次查询。
+    sa.Index("ix_intents_campus_deadline", "campus_id", "deadline"),
+    sa.Index("ix_intents_principal", "campus_id", "principal_id"),
+)
+
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
-RLS_TABLES: tuple[str, ...] = ("principals",)
+RLS_TABLES: tuple[str, ...] = ("principals", "intent_signals")
