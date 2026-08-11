@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        # 和 docker-compose 同一个镜像。用 postgres:18 会在
+        # `CREATE EXTENSION vector` 上直接失败，而那时候错误信息离
+        # 真正的原因很远。
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: cofield
+          POSTGRES_PASSWORD: cofield
+          POSTGRES_DB: cofield
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cofield -d cofield"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      COFIELD_TEST_DATABASE_URL: postgresql+psycopg://cofield:cofield@localhost:5432/cofield
+      # 磁带回放。**不给凭证是刻意的**——CI 里如果能调真模型，
+      # 某次改动之后它就会开始偷偷花钱而没人发现。
+      COFIELD_LLM_MODE: replay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+        working-directory: apps/api
+
+      - name: 格式与静态检查
+        working-directory: apps/api
+        run: |
+          uv run ruff check src tests
+          uv run mypy src
+
+      - name: 领域核心纯度
+        # 领域核心不得读时钟、不得 import 第三方 SDK 类型。
+        # 这条靠 AST 检查，不靠 review 时凭感觉抓。
+        run: uv run --project apps/api python scripts/check_domain_purity.py
+
+      - name: 测试
+        working-directory: apps/api
+        run: uv run pytest tests -o addopts= -q
+
+      - name: 契约没有漂移
+        # Pydantic → OpenAPI → 前端类型。三层同名，任何一层都不手写类型。
+        # 改了 schema 却忘了重新导出，会让前端类型停留在旧契约上——
+        # 那种错误在运行时才炸，而且离原因很远。
+        run: |
+          uv run --project apps/api python scripts/export_openapi.py
+          git diff --exit-code artifacts/openapi.json
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web typecheck
+      - run: pnpm --filter web test
+      - name: 前端类型没有被手写
+        # api-types.ts 是生成物。有人手改它，下次重新生成就会被覆盖，
+        # 而在那之前类型是错的却看起来是对的。
+        run: |
+          pnpm --filter web gen:api
+          git diff --exit-code apps/web/lib/api-types.ts
+
+  vocabulary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: 用户可见文案不含领域词汇
+        # 07 §2.1 明确要求这条能被机器检查。黑名单从 CONTEXT.md 的术语表
+        # 生成，不手抄——手抄的清单迟早和文档漂移。
+        run: uv run --project apps/api python scripts/check_vocabulary.py
