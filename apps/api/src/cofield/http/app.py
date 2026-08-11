@@ -6,9 +6,13 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from datetime import UTC, datetime, timedelta
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from cofield.adapters.clock import SimulatedClock
+from cofield.config import settings
 from cofield.http import (
     envelopes,
     intents,
@@ -46,7 +50,26 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health", tags=["ops"])
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "ok", "demo_mode": str(settings.demo_mode).lower()}
+
+    if settings.demo_mode:
+        # 演示模式下时钟可以被推着走。**关掉时这条路由根本不注册**——
+        # 一个能改系统时间的接口在生产里不该只是"权限不够"，
+        # 而应该探测不到。
+        app.state.clock = SimulatedClock(datetime.now(UTC))
+
+        @app.post("/api/clock:advance", tags=["ops"])
+        def advance(seconds: int = 3600) -> dict[str, str]:
+            """把时钟往前推。
+
+            核心循环里有两处要等：撮合窗口六小时、记忆回流两周。
+            演示不该真等——这正是 `Clock` 端口从第一天就注入的理由。
+            """
+            clock = getattr(app.state, "clock", None)
+            if not isinstance(clock, SimulatedClock):
+                raise HTTPException(status_code=404, detail="没开演示模式")
+            clock.advance(timedelta(seconds=seconds))
+            return {"now": clock.now().isoformat()}
 
     return app
 

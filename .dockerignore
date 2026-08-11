@@ -1,0 +1,24 @@
+# 宿主机的构建产物绝不能进镜像。
+#
+# 没有这个文件时，`COPY apps/api/ ./` 会把宿主的 .venv 整个盖到容器里
+# 那份 Linux venv 上——macOS 的二进制在容器里跑不起来，而 uv sync 看见
+# venv 已存在就不重装，于是镜像里是一份坏掉的环境。
+#
+# __pycache__ 同理：.pyc 的有效性靠源文件 mtime 判断，而 COPY 保留 mtime，
+# 于是过期的字节码会被当成有效的用下去。这类问题的表现是"代码明明改了
+# 但行为没变"，排查起来极其费时。
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/node_modules/
+**/.next/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+
+.git/
+.env
+.env.local
+.claude/
+docs/
+artifacts/openapi.json

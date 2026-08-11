@@ -213,7 +213,12 @@ def test_health_needs_no_identity(engine: Engine) -> None:
     app = create_app()
     app.dependency_overrides[deps.get_engine] = lambda: engine
     with TestClient(app) as anonymous:
-        assert anonymous.get("/api/health").json() == {"status": "ok"}
+        body = anonymous.get("/api/health").json()
+
+    # 断言"活着"和"演示模式默认关着"，不断言整个响应体——
+    # 后者会让每加一个字段都红一次，而那种红说明不了任何问题。
+    assert body["status"] == "ok"
+    assert body["demo_mode"] == "false", "演示模式默认必须是关的"
 
 
 def test_the_clock_flows_all_the_way_through(

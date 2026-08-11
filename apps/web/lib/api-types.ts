@@ -664,6 +664,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/me/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Events
+         * @description 我参加过的事，进行中、已完成、已取消都在。
+         *
+         *     空列表不是错误：一个刚注册的人本来就什么都没参加过，
+         *     这一屏该说的是"先说说想做点什么"，不是 404。
+         */
+        get: operations["my_events_api_me_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Records
+         * @description 系统记着的关于我的每一句话，按处境分三堆。
+         */
+        get: operations["my_records_api_me_facets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/facets/{facet_id}:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Record
+         * @description 本人点头。只有点过头的那些能被引用。
+         *
+         *     仓储把 `principal_id = by` 写在 WHERE 里，所以"只能确认自己的"
+         *     在 SQL 层就成立；这里再查一次是为了给出**说得清的失败**，
+         *     不是为了做权限判断。
+         */
+        post: operations["confirm_record_api_facets__facet_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/facets/{facet_id}:revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Record
+         * @description 本人收回。一步完成，不问为什么，不再确认一次。
+         *
+         *     收回一条记录应该像删一条朋友圈那么简单。如果行使权利需要仪式感，
+         *     用户就不会行使，而一个没人行使的权利等于不存在。
+         *
+         *     重复收回是幂等的空操作：仓储的 `revoked_at IS NULL` 保证第二次点击
+         *     不会把收回时刻改成现在。
+         */
+        post: operations["revoke_record_api_facets__facet_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Visibility
+         * @description 我给出去过、现在还生效的那几次披露。
+         *
+         *     过期的和已收回的不在这里——这一屏问的是"现在谁还能看到我"，
+         *     把已经失效的混进来，用户就分不清哪些还需要处理。
+         */
+        get: operations["my_visibility_api_me_visibility_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1164,6 +1280,96 @@ export interface components {
             /** Notice */
             notice?: string | null;
         };
+        /**
+         * MyEventOut
+         * @description 一次做成的事，不是一个头衔。
+         *
+         *     取消的事照样在这里——它属于本人的真实经历，藏起来就等于系统替他
+         *     修饰了历史。但它**不产生成功记录**，所以 `counts_as_done` 是独立字段
+         *     而不是让界面自己从 `state` 推：推错了就会把没做成的事说成做成了。
+         */
+        MyEventOut: {
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            /** Title */
+            title: string;
+            /** Goal */
+            goal: string;
+            /** State */
+            state: string;
+            /**
+             * Formed At
+             * Format: date-time
+             */
+            formed_at: string;
+            /** Deadline */
+            deadline?: string | null;
+            /** Left At */
+            left_at?: string | null;
+            /** With Others */
+            with_others: string[];
+            /** Counts As Done */
+            counts_as_done: boolean;
+        };
+        /**
+         * MyRecordOut
+         * @description 系统记着的、关于我的一句话。
+         *
+         *     三样东西缺一不可：说了什么、从哪来的、谁写的。说不出来源的记录，
+         *     本人无从判断该不该留着它；看不出是谁写的，"AI 起草、人类决定"
+         *     就只是一句话。
+         */
+        MyRecordOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Text */
+            text: string;
+            /** State */
+            state: string;
+            /** Drafted By Agent */
+            drafted_by_agent: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /** Event Id */
+            event_id?: string | null;
+            /** Event Title */
+            event_title?: string | null;
+            /** Sources */
+            sources: components["schemas"]["RecordSourceOut"][];
+            /** In Use */
+            in_use: number;
+        };
+        /**
+         * MyRecordsOut
+         * @description 待确认的和已确认的**分开返回**，不是一个列表加一个状态字段。
+         *
+         *     分组在服务端做，界面就没有把两堆混起来显示的机会——而"没点过的
+         *     永远不出现在任何人的证明里"这条，恰恰最怕的就是混起来。
+         *
+         *     收回过的也列出来：本人要看得见系统猜过什么、自己点过什么、
+         *     又收回过什么，只给已确认的那部分，"系统记住了什么"就永远答不完整。
+         */
+        MyRecordsOut: {
+            /** To Confirm */
+            to_confirm: components["schemas"]["MyRecordOut"][];
+            /** Confirmed */
+            confirmed: components["schemas"]["MyRecordOut"][];
+            /** Revoked */
+            revoked: components["schemas"]["MyRecordOut"][];
+        };
         /** NextStepOut */
         NextStepOut: {
             /** Kind */
@@ -1256,6 +1462,26 @@ export interface components {
          * @enum {string}
          */
         Reach: "ours" | "outside";
+        /**
+         * RecordSourceOut
+         * @description 一条记录指回去的那件东西。
+         */
+        RecordSourceOut: {
+            /**
+             * Evidence Id
+             * Format: uuid
+             */
+            evidence_id: string;
+            /** Kind */
+            kind: string;
+            /** Title */
+            title: string;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+        };
         /** RelaxationOut */
         RelaxationOut: {
             /** Field Name */
@@ -1307,6 +1533,19 @@ export interface components {
             filled: number;
             /** Gap */
             gap: number;
+        };
+        /**
+         * ShownFieldOut
+         * @description 这次带出去的一项。
+         *
+         *     `field_name` 是标识符，界面把它翻成人话——服务端不发中文标签，
+         *     是为了不让同一个字段的说法在两个屏上各存一份、迟早对不上。
+         */
+        ShownFieldOut: {
+            /** Field Name */
+            field_name: string;
+            /** Seen By Others */
+            seen_by_others: boolean;
         };
         /**
          * SpaceOut
@@ -1452,6 +1691,36 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /**
+         * VisibilityOut
+         * @description 一次仍在生效的对外披露。
+         *
+         *     `for_what` 不是装饰：一排"3 项，72 小时后失效"用户分辨不出哪条是哪条，
+         *     也就没法决定收回哪一条。收不回的权利等于没有这项权利。
+         */
+        VisibilityOut: {
+            /**
+             * Envelope Id
+             * Format: uuid
+             */
+            envelope_id: string;
+            /**
+             * Intent Id
+             * Format: uuid
+             */
+            intent_id: string;
+            /** For What */
+            for_what: string;
+            /** Shows */
+            shows: components["schemas"]["ShownFieldOut"][];
+            /** Shows Records */
+            shows_records: string[];
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
         };
         /**
          * WaitingOut
@@ -2540,6 +2809,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_events_api_me_events_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyEventOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_records_api_me_facets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyRecordsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_record_api_facets__facet_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                facet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyRecordOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_record_api_facets__facet_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                facet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyRecordOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_visibility_api_me_visibility_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VisibilityOut"][];
                 };
             };
             /** @description Validation Error */

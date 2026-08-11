@@ -28,6 +28,10 @@ services:
       COFIELD_DATABASE_URL: postgresql+psycopg://cofield:cofield@db:5432/cofield
       # 演示默认播两万人。想快点起来就 COFIELD_SEED_SIZE=2000 docker compose up
       COFIELD_SEED_SIZE: "${COFIELD_SEED_SIZE:-20000}"
+      # 演示模式：时钟可被推着走（POST /api/clock:advance）。
+      # 核心循环里有两处要等——撮合窗口六小时、记忆回流两周——
+      # 演示不该真等。关掉时那条路由**根本不注册**。
+      COFIELD_DEMO_MODE: "${COFIELD_DEMO_MODE:-true}"
       # 起草服务的凭证从宿主环境透传，**不写进镜像也不写进这个文件**。
       # 没配也能跑：起草会降级，产品照常可用。
       ARK_API_KEY: "${ARK_API_KEY:-}"

@@ -2182,6 +2182,364 @@
         }
       }
     },
+    "/api/me/events": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "My Events",
+        "description": "我参加过的事，进行中、已完成、已取消都在。\n\n空列表不是错误：一个刚注册的人本来就什么都没参加过，\n这一屏该说的是\"先说说想做点什么\"，不是 404。",
+        "operationId": "my_events_api_me_events_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyEventOut"
+                  },
+                  "title": "Response My Events Api Me Events Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/facets": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "My Records",
+        "description": "系统记着的关于我的每一句话，按处境分三堆。",
+        "operationId": "my_records_api_me_facets_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRecordsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/facets/{facet_id}:confirm": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Confirm Record",
+        "description": "本人点头。只有点过头的那些能被引用。\n\n仓储把 `principal_id = by` 写在 WHERE 里，所以\"只能确认自己的\"\n在 SQL 层就成立；这里再查一次是为了给出**说得清的失败**，\n不是为了做权限判断。",
+        "operationId": "confirm_record_api_facets__facet_id__confirm_post",
+        "parameters": [
+          {
+            "name": "facet_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Facet Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/facets/{facet_id}:revoke": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Revoke Record",
+        "description": "本人收回。一步完成，不问为什么，不再确认一次。\n\n收回一条记录应该像删一条朋友圈那么简单。如果行使权利需要仪式感，\n用户就不会行使，而一个没人行使的权利等于不存在。\n\n重复收回是幂等的空操作：仓储的 `revoked_at IS NULL` 保证第二次点击\n不会把收回时刻改成现在。",
+        "operationId": "revoke_record_api_facets__facet_id__revoke_post",
+        "parameters": [
+          {
+            "name": "facet_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Facet Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyRecordOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/visibility": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "My Visibility",
+        "description": "我给出去过、现在还生效的那几次披露。\n\n过期的和已收回的不在这里——这一屏问的是\"现在谁还能看到我\"，\n把已经失效的混进来，用户就分不清哪些还需要处理。",
+        "operationId": "my_visibility_api_me_visibility_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VisibilityOut"
+                  },
+                  "title": "Response My Visibility Api Me Visibility Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "tags": [
@@ -3364,6 +3722,208 @@
         "title": "ItemOut",
         "description": "画布上的一条东西。\n\n`extras` 不原样透出：它在库里是开放的 JSON，透出去前端拿到的就是一个\n`additionalProperties: true`，也就是回到手写类型。四个有约定含义的键在\n这里显式成型；将来某种条目带了新键，这里补一行——契约本来就该是显式的。"
       },
+      "MyEventOut": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "formed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Formed At"
+          },
+          "deadline": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline"
+          },
+          "left_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Left At"
+          },
+          "with_others": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "With Others"
+          },
+          "counts_as_done": {
+            "type": "boolean",
+            "title": "Counts As Done"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "title",
+          "goal",
+          "state",
+          "formed_at",
+          "with_others",
+          "counts_as_done"
+        ],
+        "title": "MyEventOut",
+        "description": "一次做成的事，不是一个头衔。\n\n取消的事照样在这里——它属于本人的真实经历，藏起来就等于系统替他\n修饰了历史。但它**不产生成功记录**，所以 `counts_as_done` 是独立字段\n而不是让界面自己从 `state` 推：推错了就会把没做成的事说成做成了。"
+      },
+      "MyRecordOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "drafted_by_agent": {
+            "type": "boolean",
+            "title": "Drafted By Agent"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Id"
+          },
+          "event_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Title"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/RecordSourceOut"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "in_use": {
+            "type": "integer",
+            "title": "In Use"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "state",
+          "drafted_by_agent",
+          "created_at",
+          "sources",
+          "in_use"
+        ],
+        "title": "MyRecordOut",
+        "description": "系统记着的、关于我的一句话。\n\n三样东西缺一不可：说了什么、从哪来的、谁写的。说不出来源的记录，\n本人无从判断该不该留着它；看不出是谁写的，\"AI 起草、人类决定\"\n就只是一句话。"
+      },
+      "MyRecordsOut": {
+        "properties": {
+          "to_confirm": {
+            "items": {
+              "$ref": "#/components/schemas/MyRecordOut"
+            },
+            "type": "array",
+            "title": "To Confirm"
+          },
+          "confirmed": {
+            "items": {
+              "$ref": "#/components/schemas/MyRecordOut"
+            },
+            "type": "array",
+            "title": "Confirmed"
+          },
+          "revoked": {
+            "items": {
+              "$ref": "#/components/schemas/MyRecordOut"
+            },
+            "type": "array",
+            "title": "Revoked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to_confirm",
+          "confirmed",
+          "revoked"
+        ],
+        "title": "MyRecordsOut",
+        "description": "待确认的和已确认的**分开返回**，不是一个列表加一个状态字段。\n\n分组在服务端做，界面就没有把两堆混起来显示的机会——而\"没点过的\n永远不出现在任何人的证明里\"这条，恰恰最怕的就是混起来。\n\n收回过的也列出来：本人要看得见系统猜过什么、自己点过什么、\n又收回过什么，只给已确认的那部分，\"系统记住了什么\"就永远答不完整。"
+      },
       "NextStepOut": {
         "properties": {
           "kind": {
@@ -3561,6 +4121,37 @@
         "title": "Reach",
         "description": "一样东西谁能看见。\n\n只有两档，且默认是窄的那一档。档位多了就没人认真选，\n而\"发出去\"这件事不该有一个随手滑过去的中间态。"
       },
+      "RecordSourceOut": {
+        "properties": {
+          "evidence_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Evidence Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "added_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Added At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "evidence_id",
+          "kind",
+          "title",
+          "added_at"
+        ],
+        "title": "RecordSourceOut",
+        "description": "一条记录指回去的那件东西。"
+      },
       "RelaxationOut": {
         "properties": {
           "field_name": {
@@ -3695,6 +4286,25 @@
           "gap"
         ],
         "title": "SeatOut"
+      },
+      "ShownFieldOut": {
+        "properties": {
+          "field_name": {
+            "type": "string",
+            "title": "Field Name"
+          },
+          "seen_by_others": {
+            "type": "boolean",
+            "title": "Seen By Others"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field_name",
+          "seen_by_others"
+        ],
+        "title": "ShownFieldOut",
+        "description": "这次带出去的一项。\n\n`field_name` 是标识符，界面把它翻成人话——服务端不发中文标签，\n是为了不让同一个字段的说法在两个屏上各存一份、迟早对不上。"
       },
       "SpaceOut": {
         "properties": {
@@ -4019,6 +4629,54 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "VisibilityOut": {
+        "properties": {
+          "envelope_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Envelope Id"
+          },
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "for_what": {
+            "type": "string",
+            "title": "For What"
+          },
+          "shows": {
+            "items": {
+              "$ref": "#/components/schemas/ShownFieldOut"
+            },
+            "type": "array",
+            "title": "Shows"
+          },
+          "shows_records": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shows Records"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "envelope_id",
+          "intent_id",
+          "for_what",
+          "shows",
+          "shows_records",
+          "expires_at"
+        ],
+        "title": "VisibilityOut",
+        "description": "一次仍在生效的对外披露。\n\n`for_what` 不是装饰：一排\"3 项，72 小时后失效\"用户分辨不出哪条是哪条，\n也就没法决定收回哪一条。收不回的权利等于没有这项权利。"
       },
       "WaitingOut": {
         "properties": {

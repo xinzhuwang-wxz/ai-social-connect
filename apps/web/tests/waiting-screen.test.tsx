@@ -140,10 +140,12 @@ describe("等待要有信息", () => {
   });
 
   it("这个方向上缺什么，只给人数不给名字", async () => {
-    mockApi();
+    const calls = mockApi();
     render(<WaitingScreen />);
 
     const box = within(await screen.findByRole("region", { name: "现在缺什么" }));
+    // 缺口要按你在等的那件事的方向问，不然拿回来的是全校混在一起的数。
+    expect(calls.some((c) => c.url === "/api/me/waiting?action_kind=creative_work")).toBe(true);
     expect(box.getByText("剪辑")).toBeVisible();
     expect(box.getByText("12 个人要，3 个人会")).toBeVisible();
     expect(box.getByText("还缺 9 个")).toBeVisible();

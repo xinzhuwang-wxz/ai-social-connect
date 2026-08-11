@@ -44,19 +44,24 @@ export function WaitingScreen() {
 
   const loadMine = useCallback(async () => {
     try {
-      setMine(await myWaitingIntents());
+      const waiting = await myWaitingIntents();
+      setMine(waiting);
       setMineDown(false);
+      return waiting;
     } catch {
       setMineDown(true);
+      return null;
     }
   }, []);
 
   const load = useCallback(async () => {
     setPulseFailed(false);
     setPulse(null);
-    void loadMine();
+    // 先知道你在等的是哪件事，才问得出"这个方向上缺什么"。不带方向去问，
+    // 拿回来的是全校所有事混在一起的数——那个数字放在这一屏上是错的。
+    const waiting = await loadMine();
     try {
-      setPulse(await waitingNow());
+      setPulse(await waitingNow(waiting?.[0]?.action_kind ?? undefined));
     } catch {
       setPulseFailed(true);
     }

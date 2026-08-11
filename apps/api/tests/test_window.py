@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
@@ -495,3 +496,69 @@ def test_proposals_stay_inside_their_tenant(engine: Engine, campus) -> None:  # 
         )
 
     assert leaked == []
+
+
+def test_a_proposal_arrives_with_its_answer_slots_already_open(
+    engine: Engine, campus
+) -> None:  # type: ignore[no-untyped-def]
+    """**产出提案的人必须同时把待答复开好。**
+
+    少了这一步整条主路径是断的：用户拿到小队、点「我加入」，收到的是
+    一句"这个人不在这一版条款的名单里"。而确认门刻意不静默创建承诺
+    （否则任何人都能给任意提案投票），所以这根线只能由这一侧接上——
+    只有它知道这一版条款的名单是谁。
+    """
+    person = campus.people[120]
+    intent = _intent(
+        person.id,
+        created_at=NOW - timedelta(hours=12),
+        deadline=NOW + timedelta(days=7),
+    )
+    _save(engine, intent, now=NOW)
+    report = _clear(engine, now=NOW)
+    assert report.proposed > 0, "这个用例需要真的配出小队"
+
+    with campus_connection(engine, SIM) as conn:
+        rows = conn.execute(
+            sa.text(
+                "SELECT p.id, p.member_ids, "
+                "  (SELECT count(*) FROM commitments c WHERE c.proposal_id = p.id) AS opened "
+                "FROM formation_proposals p"
+            )
+        ).all()
+
+    assert rows
+    for row in rows:
+        assert row.opened == len(row.member_ids), (
+            f"提案 {row.id} 有 {len(row.member_ids)} 个成员，"
+            f"却只开了 {row.opened} 条待答复——他们点「我加入」会被拒"
+        )
+
+
+def test_an_intent_without_a_deadline_still_gets_usable_proposals(
+    engine: Engine, campus
+) -> None:  # type: ignore[no-untyped-def]
+    """没写截止期的需求，提案不能一生成就过期。
+
+    这里原来拿 `EPOCH`（窗口对齐用的固定基准，2026-01-01）当"现在"算兜底
+    截止期，于是 `expires_at` 落在**过去**——清算日志显示产出了六个提案，
+    而用户那一屏永远是空的。**静默**是最坏的部分。
+    """
+    person = campus.people[130]
+    intent = _intent(
+        person.id,
+        created_at=NOW - timedelta(hours=12),
+        deadline=NOW + timedelta(days=7),
+    )
+    # 去掉时间窗，走兜底那条路。
+    intent = replace(
+        intent, content=replace(intent.content, time_window=None)
+    )
+    _save(engine, intent, now=NOW)
+    report = _clear(engine, now=NOW)
+    assert report.proposed > 0
+
+    with campus_connection(engine, SIM) as conn:
+        usable = ProposalRepository(conn, SIM).list_for_intent(intent.id, now=NOW)
+
+    assert usable, "提案一生成就过期了——用户永远拿不到小队"

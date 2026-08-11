@@ -129,7 +129,7 @@ describe("persona 走查：机器能判的三项", () => {
     render(<Page />);
     await waitFor(() => expect(document.body.textContent).toContain("作品创作"));
     const friction: Friction = {
-      persona: PERSONAS[0].name,
+      persona: PERSONAS[0]?.name ?? "未知 persona",
       blocked_steps: 0,
       term_leaks: 0,
       missing_states: 0,

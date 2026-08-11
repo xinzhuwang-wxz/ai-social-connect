@@ -7,14 +7,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from sqlalchemy import Connection
 
+from cofield.adapters.clock import FrozenClock
 from cofield.adapters.persistence.commitments import CommitmentRepository
 from cofield.adapters.persistence.events import EventRepository, FormedEvent
+from cofield.adapters.persistence.intents import IntentRepository
 from cofield.adapters.persistence.schema import formation_proposals
 from cofield.formation.gate import (
     DECISION_WINDOW,
@@ -23,6 +25,10 @@ from cofield.formation.gate import (
     GateVerdict,
     evaluate,
 )
+
+#: 给仓储的占位时刻。这条路径上的时刻全部由调用方显式传入，
+#: 这个钟一次都不会被读到——写死一个值比传 `None` 更早暴露"谁偷读了时钟"。
+_UNUSED = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +60,8 @@ class ConfirmationGate:
         self._campus = campus_id
         self._commitments = CommitmentRepository(conn, campus_id)
         self._events = EventRepository(conn, campus_id)
+        # 这条路径上的时刻一律由调用方显式传入，仓储不读钟。
+        self._intents = IntentRepository(conn, FrozenClock(_UNUSED), campus_id)
 
     def invite(self, proposal_id: UUID, *, now: datetime) -> int:
         """给这一版条款的每个成员开一条待答复。"""
@@ -121,11 +129,16 @@ class ConfirmationGate:
         if not verdict.can_form:
             return Outcome(state=verdict)
 
+        # 空间的名字用**这件事本身的目标**，不是证明里的第一句话。
+        # 「缺的剪辑、拍摄都有人补上了」是配队的理由，不是这个项目的名字——
+        # 07 说共域在界面上"直接就是项目名"，而项目名只有意图说得出。
+        intent = self._intents.get(row.intent_id)
+        goal = intent.content.goal if intent is not None else ""
         formed = self._events.form(
             proposal_id=proposal_id,
             action_kind=row.action_kind,
-            title=_title_of(row),
-            goal=_goal_of(row),
+            title=goal or "我们的项目",
+            goal=goal,
             steward_id=row.member_ids[0],
             member_ids=tuple(row.member_ids),
             role_assignment={},
@@ -194,22 +207,6 @@ class ConfirmationGate:
         )
         self._withdraw(row.id, now=now)
         return new_id
-
-
-def _title_of(row: sa.Row[tuple[object, ...]]) -> str:
-    proof = row.proof if isinstance(row.proof, dict) else {}
-    satisfied = proof.get("satisfied") or []
-    if satisfied and isinstance(satisfied[0], dict):
-        return str(satisfied[0].get("text", ""))[:60] or "我们的项目"
-    return "我们的项目"
-
-
-def _goal_of(row: sa.Row[tuple[object, ...]]) -> str:
-    proof = row.proof if isinstance(row.proof, dict) else {}
-    lines = proof.get("satisfied") or []
-    if lines and isinstance(lines[0], dict):
-        return str(lines[0].get("text", ""))
-    return ""
 
 
 def _first_action_of(row: sa.Row[tuple[object, ...]]) -> str | None:

@@ -60,6 +60,7 @@ from cofield.adapters.persistence.schema import intent_signals, principals
 from cofield.domain.model.action_kind import ActionKindRegistry
 from cofield.domain.model.consent import Audience
 from cofield.domain.model.intent import IntentSignal, IntentState
+from cofield.formation.service import ConfirmationGate
 from cofield.matching import proof as proof_builder
 from cofield.matching import stability
 from cofield.matching.contracts import (
@@ -81,6 +82,10 @@ DEFAULT_WINDOW = timedelta(hours=6)
 
 #: 提案的有效期。过了这个点，被提案的人很可能已经答应了别的事。
 PROPOSAL_TTL = timedelta(hours=48)
+
+#: 用户没写截止期时给这条需求留多久。
+#: 一周：够攒够几轮清算，又不至于让一条早就不作数的需求一直占着池子。
+DEFAULT_DEADLINE = timedelta(days=7)
 
 #: 一次清算里，同一个人最多出现在几条需求的提案里。
 #:
@@ -372,7 +377,7 @@ class Clearing:
             )
             | excluding
         )
-        requirement = self._requirement(intent, unit, excluded=taken)
+        requirement = self._requirement(intent, unit, now=now, excluded=taken)
         candidates = tuple(
             Member(
                 principal_id=c.principal_id,
@@ -401,12 +406,14 @@ class Clearing:
             return 0
 
         visible = self._visible_fields(group_members=result.groups)
+        gate = ConfirmationGate(self._conn, self._campus)
         # 只给 2–3 个。实证表明选择变多反而降低决策质量：
         # 搜索上限 3→100 时福利显著下降。
         for group in result.groups[:3]:
+            proposal_id = uuid4()
             self._proposals.add(
                 Proposal(
-                    id=uuid4(),
+                    id=proposal_id,
                     intent_id=intent.id,
                     action_kind=intent.action_kind,
                     cleared_at=cleared_at,
@@ -421,6 +428,13 @@ class Clearing:
                     expires_at=min(requirement.deadline, now + PROPOSAL_TTL),
                 )
             )
+            # **提案一落库就给成员开待答复。**
+            #
+            # 少了这一步，整条主路径是断的：用户拿到小队、点"我加入"，
+            # 收到的是一句"这个人不在这一版条款的名单里"。而门那边刻意
+            # 不静默创建承诺（否则任何人都能给任意提案投票），所以这根线
+            # 必须由**产出提案的人**接上——他才知道这一版条款的名单是谁。
+            gate.invite(proposal_id, now=now)
         # 按**不同的需求**计数，不按组数：一个人出现在给同一个人的两个备选队里
         # 是正常的，那是同一次提案的两个选项；出现在六个人的提案里才是问题。
         exposure.update(
@@ -438,13 +452,24 @@ class Clearing:
         intent: IntentSignal,
         unit: MarketUnit,
         *,
+        now: datetime,
         excluded: frozenset[UUID] = frozenset(),
     ) -> Requirement:
         content = intent.content
+        # 没写时间窗时的兜底。
+        #
+        # 这里原来写的是 `unit.next_clearing(EPOCH) + 7 天`——而 EPOCH 是
+        # 窗口对齐用的固定基准（2026-01-01），不是"现在"。结果是兜底截止期
+        # 落在**过去**，提案一生成就已经过期，用户永远拿不到小队，
+        # 而清算日志显示一切正常。
+        #
+        # 这正是"领域核心不得直接调 now()"要防的那一类错误的反面：
+        # 时刻必须由调用方显式传进来，一旦有人图省事拿个常量当"现在"，
+        # 错误会静默且难查。
         deadline = (
             content.time_window.deadline
             if content.time_window
-            else unit.next_clearing(EPOCH) + timedelta(days=7)
+            else now + DEFAULT_DEADLINE
         )
         size = content.team_size
         return Requirement(
