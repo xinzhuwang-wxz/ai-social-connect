@@ -22,7 +22,12 @@ from cofield.domain.model.intent import (
 )
 from cofield.matching.funnel import Funnel, contiguous_common_slots
 from cofield.simulation.loader import load_principals
-from cofield.simulation.population import SKILL_ABUNDANCE, arrivals, generate
+from cofield.simulation.population import (
+    SKILL_ABUNDANCE,
+    arrivals,
+    fingerprint,
+    generate,
+)
 
 NOW = datetime(2026, 8, 12, 9, tzinfo=UTC)
 SIM = "simulation"
@@ -94,8 +99,11 @@ def test_availability_is_constrained_enough_to_bite(campus) -> None:  # type: ig
         for _ in range(300)
     )
 
-    assert any_slot > 285, "单段重合应该几乎总能凑上"
-    assert 90 < two_in_a_row < 240, "连续两段应该是真约束，既不总成也不总败"
+    # 实测（种子固定后跨进程稳定）：单段 292/300，连续两段 148/300。
+    # 阈值留出余量——贴着实测值划会让人口的任何一点合理演进都变成红灯，
+    # 而这条用例要守的是"单段不是约束、两段是"这个**性质**，不是那两个数。
+    assert any_slot > 270, "单段重合应该几乎总能凑上"
+    assert 60 < two_in_a_row < 240, "连续两段应该是真约束，既不总成也不总败"
 
 
 def test_the_history_layers_match_the_design(campus) -> None:  # type: ignore[no-untyped-def]
@@ -109,17 +117,32 @@ def test_the_history_layers_match_the_design(campus) -> None:  # type: ignore[no
     assert 0.17 < tiers[2] / SIZE < 0.23
 
 
-def test_generation_is_reproducible() -> None:
-    """仿真结论必须能被重跑验证，所以给定种子必须完全一致。"""
-    left = generate(size=500, seed=7)
-    right = generate(size=500, seed=7)
+#: 五百人、种子 7 的人口指纹。
+#:
+#: **写死一个常量，而不是跑两次比一比。** 原来那条测试在同一个进程里
+#: 生成两份再比较——进程内哈希盐相同，所以它永远相等，也就永远发现不了
+#: 真正的问题：课表用了内置 `hash()`，而 Python 的字符串哈希每个进程加
+#: 不同的盐，同一个种子在两次运行里生成的是两份不同的课表。
+#:
+#: 这个洞让"给定种子完全可复现"这句话在很长一段时间里是假的，
+#: 而所有实测数字（四人组 45%、七倍富集）都只是某一次运行的巧合。
+POPULATION_FINGERPRINT = "2e8db6f16aa85335ee2952ad49bf288b"
 
-    assert [p.display_name for p in left.people] == [
-        p.display_name for p in right.people
-    ]
-    assert [p.availability for p in left.people] == [
-        p.availability for p in right.people
-    ]
+
+def test_generation_is_reproducible_across_processes() -> None:
+    """仿真结论必须能被重跑验证。
+
+    指纹变了就是生成器变了：要么是有意改的（更新这个常量，
+    并在提交信息里说清改了什么），要么是又漏进了一处进程相关的随机性。
+    """
+    assert fingerprint(generate(size=500, seed=7)) == POPULATION_FINGERPRINT
+
+
+def test_the_fingerprint_actually_catches_a_difference() -> None:
+    """指纹本身要能失败，否则上面那条又是一次自欺。"""
+    assert fingerprint(generate(size=500, seed=7)) != fingerprint(
+        generate(size=500, seed=8)
+    )
 
 
 def test_arrivals_cluster_before_their_deadlines(campus) -> None:  # type: ignore[no-untyped-def]

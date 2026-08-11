@@ -20,5 +20,31 @@ services:
       # https://github.com/docker-library/postgres/pull/1259
       - dbdata:/var/lib/postgresql
 
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      COFIELD_DATABASE_URL: postgresql+psycopg://cofield:cofield@db:5432/cofield
+      # 演示默认播两万人。想快点起来就 COFIELD_SEED_SIZE=2000 docker compose up
+      COFIELD_SEED_SIZE: "${COFIELD_SEED_SIZE:-20000}"
+      # 起草服务的凭证从宿主环境透传，**不写进镜像也不写进这个文件**。
+      # 没配也能跑：起草会降级，产品照常可用。
+      ARK_API_KEY: "${ARK_API_KEY:-}"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["8000:8000"]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      # 浏览器里跑的代码要连宿主暴露的端口，不是 compose 网络里的服务名。
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+    depends_on: [api]
+    ports: ["3000:3000"]
+
 volumes:
   dbdata:

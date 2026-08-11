@@ -29,6 +29,7 @@ from __future__ import annotations
 import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from hashlib import blake2b
 from uuid import UUID, uuid4
 
 import networkx as nx
@@ -205,6 +206,21 @@ class Population:
         return dict(sorted(counts.items(), key=lambda kv: kv[1]))
 
 
+def fingerprint(population: Population) -> str:
+    """一份人口的指纹。
+
+    可复现性只有跨进程才有意义，所以这条不能靠"跑两次比一比"——
+    要比就得比一个**写死在测试里的常量**。指纹变了说明生成器变了，
+    那时候要么是有意改的（更新常量，并在提交信息里说清改了什么），
+    要么是又漏进了一处进程相关的随机性。
+    """
+    payload = "|".join(
+        f"{p.display_name}:{p.availability}:{','.join(sorted(p.skills))}:{p.zone}"
+        for p in population.people
+    )
+    return blake2b(payload.encode(), digest_size=16).hexdigest()
+
+
 def _weighted_choice(rng: random.Random, options: tuple[tuple[str, float], ...]) -> str:
     total = sum(w for _, w in options)
     roll = rng.uniform(0, total)
@@ -226,12 +242,27 @@ def _course_load(rng: random.Random, major: str, year: int) -> list[str]:
     return required + electives
 
 
+def _slot_of(course: str) -> int:
+    """一门课占哪个时段。
+
+    **不能用内置 `hash()`。** Python 的字符串哈希每个进程加不同的盐，
+    于是同一个种子在两次运行里会生成两份不同的课表——而"给定种子完全可复现"
+    是这份人口存在的前提：仿真结论必须能被重跑验证，不然那些实测数字
+    （四人组 45%、七倍富集）就只是某一次运行的巧合。
+
+    这个洞藏了很久没被发现，因为可复现性测试是在**同一个进程内**跑两次
+    `generate()` 比较——进程内盐相同，永远相等。现在那条测试改成比对
+    一份写死的指纹。
+    """
+    return blake2b(course.encode(), digest_size=8).digest()[0] % WEEK_SLOTS
+
+
 def _availability_from_courses(rng: random.Random, courses: list[str]) -> str:
     """课表决定空闲。同一门课的人被占掉同一批时段。"""
     busy = set()
     for course in courses:
         # 课程名决定它占哪个时段——同一门课对所有人占同一格。
-        slot = hash(course) % WEEK_SLOTS
+        slot = _slot_of(course)
         busy.add(slot)
         if rng.random() < 0.5:  # 双课时
             busy.add((slot + 1) % WEEK_SLOTS)
