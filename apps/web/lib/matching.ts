@@ -68,10 +68,21 @@ export const gateStatus = (proposalId: string) =>
  *
  * 身份走请求头，不走请求体——所以这里没有 principal_id 参数，也不该有。
  */
-export const decide = (proposalId: string, answer: string, condition?: string) =>
+export const decide = (
+  proposalId: string,
+  answer: string,
+  condition?: string,
+  /** 「这次不行，以后类似的叫我」。只有拒绝时有意义——
+   *  加入了就不需要"以后再叫我"。 */
+  remindMe = false,
+) =>
   request<GateStatus>(`/api/proposals/${proposalId}:decide`, {
     method: "POST",
-    body: JSON.stringify({ answer, condition: condition ?? null }),
+    body: JSON.stringify({
+      answer,
+      condition: condition ?? null,
+      remind_me: remindMe,
+    }),
   });
 
 /** 立刻配一轮。演示用：不必真等到窗口到点才看得见结果。同一窗口内重复调用是安全的。 */
@@ -86,6 +97,16 @@ export async function myWaitingIntents(): Promise<Intent[]> {
   const mine = await api.myIntents();
   return mine.filter((intent) => intent.is_matchable);
 }
+
+/**
+ * 这事不找了。
+ *
+ * **在这之前，一条发出去的需求没有任何办法收回。** 它会一直待在池子里，
+ * 一轮一轮地占着会这一样的人，还不停给本人推他早就不想要的小队。
+ * 后端的 `:withdraw` 一直在，客户端的 `api.withdraw` 也一直在，
+ * 只是**没有一屏用它**——建好了却没有入口，和没建一样。
+ */
+export const dropIntent = (intentId: string) => api.withdraw(intentId);
 
 /**
  * 改需求，然后把它送回队列。

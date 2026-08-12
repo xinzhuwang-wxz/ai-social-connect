@@ -23,6 +23,15 @@
  * 6. **整条记录都在，不截断。** 说过的话往回翻得到；哪天说的也标出来，
  *    不然一条长记录翻起来没有落点。
  *
+ * ## 手机上还多三条
+ *
+ * 7. **我说的靠右，别人说的靠左。** 一条从上到下齐宽的记录，在手机上
+ *    每读一句都要先去看一眼作者名才知道是谁——左右一分，这一步就省了。
+ *    助手**永远靠左**：右边那一侧只属于本人。
+ * 8. **输入框吸底。** 一条长记录往回翻两屏之后，输入框就被翻没了；
+ *    要说话得先滑回来，而那一路上人就把想说的话忘了。
+ * 9. **点击区不小于 44px。** 走在路上单手打字的人点不中 36px 的按钮。
+ *
  * 界面文案不使用领域词汇（见 docs/07 语言映射表）。
  */
 
@@ -56,6 +65,20 @@ function whoSaidIt(message: Message, me: string): string {
   return message.author_id === me ? "我" : "组里的人";
 }
 
+/** 这句话是不是我说的。助手说的**永远不算**——右边那一侧只属于本人。 */
+function isMine(message: Message, me: string): boolean {
+  return !message.is_agent && message.author_id === me;
+}
+
+/** 手机上的点击区。规范给的按钮高度是 44–52px。 */
+const PRIMARY =
+  "inline-flex min-h-[48px] items-center justify-center rounded-[16px] bg-accent px-5 text-[15px] font-medium text-paper disabled:opacity-35";
+const SECONDARY =
+  "inline-flex min-h-[44px] items-center justify-center rounded-[16px] border border-line bg-card px-4 text-[15px] disabled:opacity-35";
+/** 只有文字的那一类。下划线常在，不靠 hover——手机上没有 hover。 */
+const QUIET =
+  "inline-flex min-h-[44px] items-center text-[15px] text-ink-soft underline underline-offset-4 hover:text-ink active:text-ink";
+
 export function SpaceChat({ spaceId }: { spaceId: string }) {
   const [chat, setChat] = useState<Chat | null>(null);
   const [failed, setFailed] = useState(false);
@@ -65,8 +88,18 @@ export function SpaceChat({ spaceId }: { spaceId: string }) {
    * 单独一次取数：问不到名字只是少说一行，说话这件事照常。
    */
   const [about, setAbout] = useState<Map<string, About>>(new Map());
-  /** 助手这会儿起不了话头。是一句平静的话，不是一次故障。 */
+  /** 助手这会儿说不出什么。是一句平静的话，不是一次故障。 */
   const [nothingToAsk, setNothingToAsk] = useState(false);
+  /** 联系不上助手——要说清，不能静默。和「助手没东西说」是两件不同的事。 */
+  const [topicsFailed, setTopicsFailed] = useState(false);
+  /**
+   * 助手刚发了个话头。
+   *
+   * 话头发出之后要在屏上说清它还不算数——让人聊出结果就以为事情定了，
+   * 是这一段最容易翻的车。同时给「继续聊聊」这条出路：助手发的话头
+   * 不该变成必须回答的作业。
+   */
+  const [topicsRaised, setTopicsRaised] = useState(false);
   const [asking, setAsking] = useState(false);
 
   const load = useCallback(async () => {
@@ -98,12 +131,20 @@ export function SpaceChat({ spaceId }: { spaceId: string }) {
   async function startATopic() {
     setAsking(true);
     setNothingToAsk(false);
+    setTopicsFailed(false);
+    setTopicsRaised(false);
     try {
       const raised = await askForTopics(spaceId);
-      if (raised.length === 0) setNothingToAsk(true);
-      else refresh();
+      if (raised.length === 0) {
+        // 助手暂时没有要问的事——不是故障，是它这会儿说不出什么。
+        setNothingToAsk(true);
+      } else {
+        setTopicsRaised(true);
+        refresh();
+      }
     } catch {
-      setNothingToAsk(true);
+      // 联系不上和「没东西说」是两件事：措辞不同，用户下一步也不同。
+      setTopicsFailed(true);
     } finally {
       setAsking(false);
     }
@@ -112,22 +153,25 @@ export function SpaceChat({ spaceId }: { spaceId: string }) {
   const me = currentPrincipal();
 
   return (
-    <section aria-label="说说话" className="mt-10">
-      <h2 className="text-[16px] font-medium">说说话</h2>
+    <section aria-label="说说话" className="mt-8 sm:mt-10">
+      <h2 className="text-[18px] font-semibold">说说话</h2>
       <p className="mt-0.5 text-[13px] text-ink-soft">
         说过的话都留着，往回翻得到。这里聊出的结果不算定下来——每件事还得相关的人各自去点头。
       </p>
 
       {failed ? (
-        <div role="alert" className="mt-4 rounded-[16px] border border-line bg-card p-5">
-          <p className="text-[15px]">现在看不到这里说过的话。</p>
-          <p className="mt-1 text-[13px] text-ink-soft">
+        <div
+          role="alert"
+          className="mt-4 rounded-[16px] border border-line bg-card p-4 sm:p-5"
+        >
+          <p className="text-[16px]">现在看不到这里说过的话。</p>
+          <p className="mt-1 text-[14px] text-ink-soft">
             没连上的时候谁说过什么都不会丢，你回来再看也不迟。
           </p>
           <button
             type="button"
             onClick={() => void load()}
-            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+            className={PRIMARY + " mt-4 w-full sm:w-auto"}
           >
             再试一次
           </button>
@@ -146,28 +190,52 @@ export function SpaceChat({ spaceId }: { spaceId: string }) {
 
       {!failed && chat !== null && (
         <>
+          {/* 「推进一下」排在输入框**上面**：吸底的那一格只留给
+              "现在就说一句"，别的东西挤进去就把它顶离了拇指。 */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button
+              type="button"
+              disabled={asking}
+              onClick={() => void startATopic()}
+              className={SECONDARY}
+            >
+              推进一下
+            </button>
+            {nothingToAsk && (
+              <span className="text-[13px] text-ink-faint">
+                助手这会儿说不出什么。你先说一句，大家会接的。
+              </span>
+            )}
+          </div>
+          {topicsFailed && (
+            <p role="alert" className="mt-2 text-[13px] text-clash">
+              现在联系不上助手，稍后再试一次。
+            </p>
+          )}
+          {topicsRaised && (
+            // 说清话头还不算数，同时给「继续聊聊」这条出路。
+            // 用户不应该觉得被迫必须回复助手问的那一件事。
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[10px] border border-draft bg-draft-soft px-4 py-3">
+              <span className="text-[13px] text-draft">
+                助手发了个话头。聊出来的结果不算定下来——还得大家各自去点头。
+              </span>
+              <button
+                type="button"
+                onClick={() => setTopicsRaised(false)}
+                className={QUIET}
+              >
+                继续聊聊
+              </button>
+            </div>
+          )}
           <Say
             spaceId={spaceId}
             label="说一句"
             placeholder="比如：我周三晚上都在，谁一起过一遍脚本"
             cta="说出去"
+            docked
             onSaid={refresh}
           />
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <button
-              type="button"
-              disabled={asking}
-              onClick={() => void startATopic()}
-              className="rounded-[12px] border border-line px-3 py-1.5 text-[14px] disabled:opacity-35"
-            >
-              让助手起个话头
-            </button>
-            {nothingToAsk && (
-              <span className="text-[13px] text-ink-faint">
-                助手这会儿起不了话头。你先说一句，大家会接的。
-              </span>
-            )}
-          </div>
         </>
       )}
     </section>
@@ -185,14 +253,14 @@ function FirstWord() {
   return (
     <div
       aria-label="还没人说话"
-      className="mt-4 rounded-[16px] border border-line bg-card p-5"
+      className="mt-4 rounded-[16px] border border-line bg-card p-4 sm:p-5"
     >
       <p className="text-[16px]">还没人说话。</p>
       <p className="mt-2 text-[14px] text-ink-soft">
         第一句最难，之后就顺了。说你什么时候有空、你想先做哪块，都比「你好」有用。
       </p>
       <p className="mt-2 text-[13px] text-ink-faint">
-        不知道从哪开口，可以让助手先挑一件还没定的事问一句。
+        不知道从哪开口，可以点「推进一下」，让助手先挑一件还没定的事问一句。
       </p>
     </div>
   );
@@ -249,25 +317,50 @@ function Record({
 /**
  * 一句话。
  *
- * 助手那几句走灰紫加虚线——和画布上它起草的东西同一条视觉通道。它说的话
- * 和人说的话长得一样，就没人分得清谁在替谁做决定。
+ * 三条视觉通道，一眼分得开：
+ *
+ * - **我说的靠右**，浅绿底。右边那一侧只属于本人
+ * - **别人说的靠左**，暖白底
+ * - **助手说的靠左**，还多一圈虚线——和画布上它起草的东西同一条通道。
+ *   它说的话和人说的话长得一样，就没人分得清谁在替谁做决定
+ *
+ * 每一句照旧写着是谁说的。左右只是让人不用读那一行就先知道个大概，
+ * 不是拿来替代它——两个人都在左边的时候，名字仍然是唯一的区分。
  */
-function Said({ message, me }: { message: Message; me: string }) {
-  const who = whoSaidIt(message, me);
+function Said({
+  message,
+  me,
+  tight,
+}: {
+  message: Message;
+  me: string;
+  /** 挂在话题卡下面的那些回复。窄一档，免得卡里再套一个同样大的块。 */
+  tight?: boolean;
+}) {
+  const mine = isMine(message, me);
+  const skin = message.is_agent
+    ? "rounded-bl-[10px] border-dashed border-draft bg-draft-soft"
+    : mine
+      ? "rounded-br-[10px] border-accent-soft bg-accent-soft"
+      : "rounded-bl-[10px] border-line bg-card";
+  const nameTone = message.is_agent
+    ? "font-medium text-draft"
+    : mine
+      ? "text-ink-soft"
+      : "text-ink-faint";
+
   return (
-    <div
-      className={`rounded-[16px] border p-4 ${
-        message.is_agent
-          ? "border-dashed border-draft bg-draft-soft"
-          : "border-line bg-card"
-      }`}
-    >
-      <p
-        className={`text-[12px] ${message.is_agent ? "text-draft" : "text-ink-faint"}`}
+    <div className={"flex " + (mine ? "justify-end" : "justify-start")}>
+      <div
+        className={`min-w-0 max-w-[85%] rounded-[16px] border ${
+          tight ? "px-3 py-2.5" : "px-4 py-3"
+        } ${skin}`}
       >
-        {who}
-      </p>
-      <p className="mt-1 text-[15px] whitespace-pre-wrap">{message.text}</p>
+        <p className={"text-[12px] " + nameTone}>{whoSaidIt(message, me)}</p>
+        <p className="mt-1 text-[15px] break-words whitespace-pre-wrap">
+          {message.text}
+        </p>
+      </div>
     </div>
   );
 }
@@ -301,9 +394,9 @@ function TopicCard({
   return (
     <article
       aria-label={topic.text}
-      className="rounded-[16px] border border-dashed border-draft bg-draft-soft p-5"
+      className="rounded-[16px] border border-dashed border-draft bg-draft-soft p-4 sm:p-5"
     >
-      <p className="text-[12px] text-draft">{whoSaidIt(topic, me)}</p>
+      <p className="text-[12px] font-medium text-draft">{whoSaidIt(topic, me)}</p>
       <p className="mt-1 text-[16px]">{topic.text}</p>
 
       {about ? (
@@ -322,11 +415,11 @@ function TopicCard({
       )}
 
       {replies.length > 0 && (
+        // 卡下面的回复也左右分明：这一段常常正是几个人来回接话的地方。
         <ol aria-label="这张卡下面的回复" className="mt-4 space-y-2">
           {replies.map((reply) => (
-            <li key={reply.id} className="rounded-[12px] border border-line bg-card p-3">
-              <p className="text-[12px] text-ink-faint">{whoSaidIt(reply, me)}</p>
-              <p className="mt-1 text-[15px] whitespace-pre-wrap">{reply.text}</p>
+            <li key={reply.id}>
+              <Said message={reply} me={me} tight />
             </li>
           ))}
         </ol>
@@ -355,7 +448,7 @@ function TopicCard({
         <button
           type="button"
           onClick={() => setReplying(true)}
-          className="mt-3 rounded-[12px] border border-line bg-card px-3 py-1.5 text-[14px]"
+          className={SECONDARY + " mt-3"}
         >
           回一句
         </button>
@@ -376,6 +469,7 @@ function Say({
   label,
   placeholder,
   cta,
+  docked,
   onSaid,
   onGiveUp,
 }: {
@@ -384,6 +478,15 @@ function Say({
   label: string;
   placeholder: string;
   cta: string;
+  /**
+   * 主输入框吸在底上。
+   *
+   * 挂在话题卡下面的那个不吸底——一屏上两个吸底的框，第二个只会挡住第一个。
+   *
+   * 注：这里吸的是**视口底**。哪天这一屏被放进带固定底栏的页面里，
+   * 要么给它一个偏移，要么把底栏让出来——底栏会压在它上面。
+   */
+  docked?: boolean;
   onSaid: () => void;
   onGiveUp?: () => void;
 }) {
@@ -408,31 +511,55 @@ function Say({
     }
   }
 
+  // 吸底的那一格里，框和按钮**并排**不上下摞：摞起来要占掉小半屏，
+  // 而这是一块永远盖在记录上面的东西。
+  const field = (
+    // **16px 不是审美，是功能**：iOS Safari 对更小的输入框会在聚焦时
+    // 自动放大整页，而且缩不回去——用户会以为页面坏了。
+    <textarea
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      rows={2}
+      aria-label={label}
+      placeholder={placeholder}
+      className="min-h-[48px] w-full resize-none rounded-[10px] border border-line bg-card px-3 py-3 text-[16px] outline-none placeholder:text-ink-faint focus:border-accent"
+    />
+  );
+
+  const sendButton = (
+    <button
+      type="button"
+      disabled={busy || text.trim().length === 0}
+      onClick={() => void send()}
+      className={PRIMARY + (docked ? " shrink-0" : "")}
+    >
+      {cta}
+    </button>
+  );
+
+  if (docked) {
+    return (
+      <div className="sticky bottom-0 z-10 mt-4 rounded-[16px] border border-line bg-paper/95 p-2 backdrop-blur-md">
+        <div className="flex items-end gap-2">
+          {field}
+          {sendButton}
+        </div>
+        {failed && (
+          <p role="alert" className="mt-2 px-1 text-[13px] text-clash">
+            这句话没发出去，还在框里。再点一次试试。
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-4">
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        rows={2}
-        aria-label={label}
-        placeholder={placeholder}
-        className="w-full resize-none rounded-[8px] border border-line bg-card p-3 text-[15px] outline-none placeholder:text-ink-faint focus:border-accent"
-      />
+      {field}
       <div className="mt-2 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={busy || text.trim().length === 0}
-          onClick={() => void send()}
-          className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
-        >
-          {cta}
-        </button>
+        {sendButton}
         {onGiveUp && (
-          <button
-            type="button"
-            onClick={onGiveUp}
-            className="text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
-          >
+          <button type="button" onClick={onGiveUp} className={QUIET}>
             先不回了
           </button>
         )}

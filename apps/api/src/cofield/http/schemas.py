@@ -16,7 +16,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from cofield.domain.model.action_kind import ActionKind
-from cofield.domain.model.intent import Conflict, IntentContent, IntentSignal
+from cofield.domain.model.intent import Conflict, IntentContent, IntentSignal, Reach
 from cofield.domain.ports.intent_extractor import Extraction, FollowUpQuestion
 
 
@@ -95,15 +95,38 @@ class ConflictOut(BaseModel):
         return cls(field=conflict.field, detail=conflict.detail)
 
 
+class FollowUpOptionOut(BaseModel):
+    """一个可以直接点的答案。
+
+    `label` 是屏上那几个字，`value` 是点下去之后填进卡里的东西。两者分开
+    是因为「这周内」要变成一个真实的截止时刻，而屏上不该出现 ISO 时间戳。
+    """
+
+    label: str
+    value: str
+
+
 class FollowUpOut(BaseModel):
+    """一个还没答的追问。
+
+    原先 `options` 是几个词，界面把它们当说明文字印出来——**用户读得到，
+    答不了**。一个答不了的追问比不问更糟：它明说了系统知道自己缺什么，
+    然后什么也不做。
+    """
+
     text: str
+    #: 它能收窄哪一栏。前端据此知道点完之后往哪儿填。
     narrows: str
-    options: list[str] = []
+    options: list[FollowUpOptionOut] = []
 
     @classmethod
     def of(cls, question: FollowUpQuestion) -> FollowUpOut:
         return cls(
-            text=question.text, narrows=question.narrows, options=list(question.options)
+            text=question.text,
+            narrows=question.narrows,
+            options=[
+                FollowUpOptionOut(label=o.label, value=o.value) for o in question.options
+            ],
         )
 
 
@@ -146,6 +169,13 @@ class IntentOut(BaseModel):
     #: 它属于哪张场景卡。撮合窗口长度由它决定，界面上要据此说
     #: "明早 8 点开始配队"。
     action_kind: str | None = None
+    #: 这条问谁。界面要说出来——一个悄悄只问熟人的需求，用户会以为
+    #: 是产品没人用。
+    #:
+    #: **用枚举而不是 str**：写成 str 的时候契约里它是一个自由字符串，
+    #: 前端只好自己再写一份取值——而"一个概念在 DB / API / 前端同名"
+    #: 的前提是这个概念在契约里真的存在。
+    reach: Reach = Reach.CAMPUS
 
     @classmethod
     def of(cls, signal: IntentSignal) -> IntentOut:
@@ -159,6 +189,7 @@ class IntentOut(BaseModel):
             expires_at=signal.expires_at,
             is_matchable=signal.is_matchable,
             action_kind=signal.action_kind,
+            reach=signal.reach,
         )
 
 
@@ -170,6 +201,13 @@ class CreateIntentRequest(BaseModel):
     action_kind: str | None = None
     #: 还没想清楚就先存着。念头只对本人可见，不参与撮合，也不进任何公共列表。
     stash: bool = False
+    #: 这条问谁：campus（全校，默认）/ known（一起做成过事的人）。
+    #: **和逐项授权是两个轴**：授权决定露出什么，这一项决定问谁。
+    #:
+    #: 进来的这一侧**故意留成 str**：认不出来的值退回全校，而不是整条
+    #: 请求 422。出去的那一侧（`IntentOut.reach`）是枚举——
+    #: 宽进严出，前端的取值因此仍然从契约派生，不用自己再写一份。
+    reach: str = "campus"
 
 
 class ReviseIntentRequest(BaseModel):

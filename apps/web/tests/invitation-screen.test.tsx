@@ -45,21 +45,22 @@ const SECOND: Invitation = {
   time_cost: null,
 };
 
+const SPACE = "77777777-7777-4777-8777-777777777777";
+
 const WAITING_ON_ME = { verdict: "waiting", waiting_on: [ME, SU, CHEN], conditions: [] };
 
 type Call = { url: string; method: string; body: unknown };
 
 type Options = {
-  ids?: string[];
   invitations?: Invitation[];
+  /** 「等你答复」那一屏拿到的整份列表。不给就用 invitations。 */
+  listed?: Invitation[];
   status?: Record<string, unknown>;
   afterDecide?: Record<string, unknown>;
-  idsStatus?: number;
+  listStatus?: number;
   invitationStatus?: number;
   statusStatus?: number;
   decideStatus?: number;
-  /** 只有这几个 id 取得出来，其余的坏掉。用来验证一条坏的不挡住其余的。 */
-  onlyReadable?: string[];
   hang?: boolean;
 };
 
@@ -83,19 +84,20 @@ function mockApi(opts: Options = {}): Call[] {
         body: init?.body ? JSON.parse(String(init.body)) : null,
       });
 
+      // 这个接口返回的是**完整的邀请对象**，不是 id 字符串。
+      // 桩数据曾经返回 id，于是它和被测代码一起把同一个错误固定了下来：
+      // 真实后端返回对象，前端把对象拼进路径，整屏 422。
+      // **桩数据要照着真实契约写，否则测试只是在证明两处错得一样。**
       if (url === "/api/me/proposals") {
-        return opts.idsStatus
-          ? reply({ detail: "没连上" }, opts.idsStatus)
-          : reply(opts.ids ?? all.map((one) => one.proposal_id));
+        return opts.listStatus
+          ? reply({ detail: "没连上" }, opts.listStatus)
+          : reply(opts.listed ?? all);
       }
 
       const asked = url.match(/\/api\/proposals\/(.+)\/invitation$/);
       if (asked) {
         if (opts.invitationStatus) {
           return reply({ detail: "找不到这个邀请" }, opts.invitationStatus);
-        }
-        if (opts.onlyReadable && !opts.onlyReadable.includes(asked[1]!)) {
-          return reply({ detail: "没连上" }, 503);
         }
         const one = all.find((row) => row.proposal_id === asked[1]);
         return one ? reply(one) : reply({ detail: "找不到这个邀请" }, 404);
@@ -169,7 +171,7 @@ describe("这次你会得到什么", () => {
   });
 
   it("说不清要花多少时间就不说，不编一个数", async () => {
-    mockApi({ ids: [OTHER], invitations: [SECOND] });
+    mockApi({ invitations: [SECOND] });
     render(<InvitationScreen proposalId={OTHER} />);
 
     await screen.findByRole("region", { name: SECOND.about });
@@ -188,7 +190,7 @@ describe("三个动作", () => {
       expect(within(card()).getByText("还差 2 个人点头。")).toBeVisible();
     });
     expect(decides(calls)).toHaveLength(1);
-    expect(lastDecide(calls)).toEqual({ answer: "accepted", condition: null });
+    expect(lastDecide(calls)).toMatchObject({ answer: "accepted", condition: null });
   });
 
   it("拒绝是一步完成的：不二次确认、不问理由", async () => {
@@ -199,7 +201,7 @@ describe("三个动作", () => {
 
     expect(await screen.findByText("知道了。这次就到这里。")).toBeVisible();
     expect(decides(calls)).toHaveLength(1);
-    expect(lastDecide(calls)).toEqual({ answer: "declined", condition: null });
+    expect(lastDecide(calls)).toMatchObject({ answer: "declined", condition: null });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(
@@ -235,17 +237,24 @@ describe("三个动作", () => {
     await userEvent.click(screen.getByRole("button", { name: "就这么说" }));
 
     await waitFor(() => {
-      expect(lastDecide(calls)).toEqual({
-        answer: "conditional",
+      expect(lastDecide(calls)).toMatchObject({ answer: "conditional",
         condition: "周四我要上课，换成周三我就来",
       });
     });
     expect(await screen.findByText(/要改一版，改好会再来问你一次/)).toBeVisible();
   });
 
-  it("都点头之后，给一条通往「这次留下了什么」的路", async () => {
+  it("都点头之后，给一条通往这件事的路", async () => {
+    // **成了之后必须有门。** 刚答应下来的人最想去的是做事的地方，
+    // 不是回顾——所以项目空间在前，「这次留下了什么」在后。
     mockApi({
-      afterDecide: { verdict: "open", waiting_on: [], conditions: [], formed_event_id: EVENT },
+      afterDecide: {
+        verdict: "open",
+        waiting_on: [],
+        conditions: [],
+        formed_event_id: EVENT,
+        space_id: SPACE,
+      },
     });
     render(<InvitationScreen proposalId={PROPOSAL} />);
 
@@ -253,8 +262,11 @@ describe("三个动作", () => {
 
     expect(await screen.findByText("都点头了，这件事成了。")).toBeVisible();
     expect(
-      screen.getByRole("link", { name: "去看这次留下了什么" }),
-    ).toHaveAttribute("href", `/events/${EVENT}/echo`);
+      screen.getByRole("link", { name: "去这件事的地方" }).getAttribute("href"),
+    ).toBe(`/spaces/${SPACE}`);
+    expect(
+      screen.getByRole("link", { name: "这次留下了什么" }).getAttribute("href"),
+    ).toBe(`/events/${EVENT}/echo`);
   });
 
   it("已经答过的人不再被问第二次", async () => {
@@ -285,7 +297,7 @@ describe("五态", () => {
   });
 
   it("空：说一句有用的话，加一个能点的入口", async () => {
-    mockApi({ ids: [] });
+    mockApi({ listed: [] });
     render(<InvitationsScreen />);
 
     expect(await screen.findByText("现在没有人在等你答复。")).toBeVisible();
@@ -297,7 +309,7 @@ describe("五态", () => {
   });
 
   it("错误：说清哪里断了，并说明没替你答复任何人", async () => {
-    mockApi({ idsStatus: 500 });
+    mockApi({ listStatus: 500 });
     render(<InvitationsScreen />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("调不出等你答复的事");
@@ -314,13 +326,18 @@ describe("五态", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("降级：一条取不出来时，其余几条照常出现", async () => {
-    mockApi({ invitations: [INVITATION, SECOND], onlyReadable: [OTHER] });
+  it("列表一次取完，不再逐条去问", async () => {
+    // 原先它先取一串 id 再逐条问内容，而那串"id"其实是完整对象——
+    // 拼出来的路径是 `/api/proposals/[object Object]/invitation`，
+    // 每一条都 422，屏上是「现在调不出等你答复的事」。
+    // 而导航那个「有 N 件事等你答复」读同一个接口、按对象解析，显示 3。
+    // **用户看到"有 3 件事等你答复"，点进去是一句"调不出来"。**
+    const calls = mockApi({ invitations: [INVITATION, SECOND] });
     render(<InvitationsScreen />);
 
-    expect(await screen.findByRole("region", { name: SECOND.about })).toBeVisible();
-    expect(screen.queryByRole("region", { name: INVITATION.about })).toBeNull();
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(await screen.findByRole("region", { name: INVITATION.about })).toBeVisible();
+    expect(screen.getByRole("region", { name: SECOND.about })).toBeVisible();
+    expect(calls.filter((c) => c.url.includes("/invitation"))).toHaveLength(0);
   });
 
   it("降级：说不清能得到什么时如实说，并且照样能不去", async () => {
@@ -356,7 +373,7 @@ describe("语言", () => {
   });
 
   it("什么都没有的那一屏也不出现领域词汇", async () => {
-    mockApi({ ids: [] });
+    mockApi({ listed: [] });
     const { container } = render(<InvitationsScreen />);
 
     await screen.findByText("现在没有人在等你答复。");
@@ -414,3 +431,30 @@ function expectNoDomainWords(text: string) {
     expect(text).not.toContain(term);
   }
 }
+
+describe("第四种回应", () => {
+  it("「以后类似的叫我」是拒绝这一次，外加留下一条线索", async () => {
+    // PRD 把它列为接收方的第四种回应。它不是第四个承诺档位——做成档位的话
+    // "他到底算不算同意了"就多出一种要解释的状态。
+    const calls = mockApi();
+    render(<InvitationScreen proposalId={PROPOSAL} />);
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: "以后类似的叫我" }),
+    );
+
+    const decided = calls.find((c) => c.url.endsWith(":decide"));
+    expect(decided?.body).toMatchObject({ answer: "declined", remind_me: true });
+  });
+
+  it("加入的时候不偷偷留线索", async () => {
+    // 加入了就不需要"以后再叫我"。
+    const calls = mockApi();
+    render(<InvitationScreen proposalId={PROPOSAL} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "我加入" }));
+
+    const decided = calls.find((c) => c.url.endsWith(":decide"));
+    expect(decided?.body).toMatchObject({ answer: "accepted", remind_me: false });
+  });
+});

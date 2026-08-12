@@ -3,45 +3,163 @@
 /* 设计令牌。见 docs/08-前端规格 §2.1。
    主色只用于「主操作」和「待你决定」——它一多就不再是强调。 */
 @theme {
-  --color-ink: oklch(0.22 0.01 260);
-  --color-ink-soft: oklch(0.48 0.01 260);
-  --color-ink-faint: oklch(0.66 0.01 260);
-  --color-paper: oklch(0.99 0.003 260);
-  --color-card: oklch(1 0 0);
-  --color-line: oklch(0.92 0.005 260);
+  /* ## 取自 PRD v2 的《前端视觉设计规范 v1.0》
+   *
+   * 清爽水彩 × 手绘家园 × 轻游戏化。规范里的原话："世界是手绘的，
+   * 交互是清晰的"——所以配色暖、圆角大，但信息层级不含糊。
+   *
+   * 每个色值都是规范给定的，**不是我调的**。改之前先回去看规范。
+   */
 
-  --color-accent: oklch(0.55 0.16 255);
-  --color-accent-soft: oklch(0.96 0.03 255);
+  /* 背景。整体不是纯白，是带少量暖黄的纸张感。 */
+  --color-paper: #f7f0de;
+  --color-card: #fff9eb;
+  /* 高亮暖白。用在卡片头、折起来的那一块。 */
+  --color-sand: #fbf4e3;
+
+  /* 文字。**避免纯黑**，整体稍微偏暖。 */
+  --color-ink: #333524;
+  --color-ink-soft: #66664e;
+  --color-ink-faint: #99937a;
+  --color-ink-hint: #b7af96;
+
+  --color-line: rgb(86 84 59 / 0.16);
+  --color-line-soft: rgb(86 84 59 / 0.08);
+
+  /* 品牌主色：深橄榄绿。Logo、一级标题、重要图标、强调文字。 */
+  --color-brand: #4d572e;
+  /* 主操作绿。主 CTA、当前导航、确认、发布。 */
+  --color-accent: #89974b;
+  --color-accent-hover: #7c8b40;
+  --color-accent-press: #6c7937;
+  /* 浅绿状态：标签、选中背景、助手信息块、植物状态。 */
+  --color-accent-soft: #dce3ae;
 
   /* 语义色。AI 草稿有独立通道——它必须和人工确认的内容一眼可辨。 */
-  --color-settled: oklch(0.58 0.12 155);
-  --color-pending: oklch(0.72 0.15 75);
-  --color-clash: oklch(0.58 0.19 25);
-  --color-draft: oklch(0.58 0.08 300);
-  --color-draft-soft: oklch(0.97 0.02 300);
+  --color-settled: #4d572e;
+  --color-settled-soft: #dce3ae;
+  /* 木质棕：种子、土壤、成长状态。**不要大面积铺满。** */
+  --color-pending: #a9753d;
+  --color-pending-soft: #f4ead0;
+  /* 提醒橙红。未读、重要提醒、少量变更提示。**禁止作为主要按钮色。** */
+  --color-clash: #d8613e;
+  --color-draft: #75bad3;
+  --color-draft-soft: #e7f1f6;
 
+  /* 圆角：整个产品用较明显的圆角，**不要锋利矩形**。 */
+  --radius-small: 10px;
+  --radius-inner: 10px;
   --radius-card: 16px;
-  --radius-inner: 8px;
-  --radius-button: 12px;
+  --radius-button: 16px;
+  --radius-large: 22px;
+  --radius-sheet: 28px;
+
+  /* 阴影：非常轻。**禁止厚阴影、玻璃拟态、强渐变。** */
+  --shadow-card: 0 6px 20px rgb(74 62 32 / 0.06);
+  --shadow-lift: 0 10px 28px rgb(74 62 32 / 0.1);
 }
 
 html {
   color-scheme: light;
 }
 
+/* 去掉点击高亮的蓝/灰块。这是"这是个应用"和"这是个网页"之间
+   最明显的区别之一——手绘水彩质感里突然出现一块蓝色方块，
+   立刻让人想起浏览器。 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
   background: var(--color-paper);
   color: var(--color-ink);
   /* 中文密排需要更松的行高 */
-  line-height: 1.6;
+  line-height: 1.65;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 数字等宽。「还有约 2 天」「2 个人要」这类数字反复出现在同一列上，
+     比例数字会让它们左右跳。 */
+  font-variant-numeric: tabular-nums;
+  /* 规范指定思源黑体（Noto Sans SC）。**这里不下载它**——
+   *
+   * 因为在这个产品的目标平台上它本来就在：安卓的系统中文字体就是
+   * Noto Sans CJK，iOS 是苹方。为一个已经装好的字体再下三百 KB，
+   * 换来的只是校园网上一次可能失败的请求——而字体加载失败会让整屏
+   * 排版塌掉。
+   *
+   * 霞鹜文楷（规范里只用在助手气泡、花园里的事件名、共同回忆标题）
+   * 确实要下载，那是一条独立的资产供给线，等真的有那几处再说。 */
   font-family:
+    "Noto Sans SC",
     system-ui,
     -apple-system,
     "PingFang SC",
     "Hiragino Sans GB",
     "Microsoft YaHei",
     sans-serif;
+  /* 手机上不要因为横向溢出出现整页横滚——那是最难查的一类"页面坏了"。 */
+  overflow-x: hidden;
+  /* 防止橡皮筋过度滚动。页面上下拖拽露出底色，
+     原生应用不会这样，这一闪就是"我在用浏览器"的信号。 */
+  overscroll-behavior-y: contain;
+}
+
+/**
+ * 手机优先。这是一个 H5 产品，桌面是它的次要形态。
+ *
+ * 点击区不小于 44px（规范里按钮 44–52px）。比这更小的目标在真手上
+ * 会反复点空，而点空三次的人就走了。
+ */
+:where(a, button, [role="button"], [role="checkbox"], [role="radio"]) {
+  /* manipulation 去掉双击缩放的延迟，让点击响应立即发生。
+     之前只对 a[role="button"] 生效，普通导航链接反而还在等双击。 */
+  touch-action: manipulation;
+  /* 禁用长按弹出浏览器菜单（"打开链接""拷贝链接"等）。
+     应用里这些菜单破坏沉浸感；正文文字不受影响，仍可选中复制。 */
+  -webkit-touch-callout: none;
+}
+
+/* 输入框不小于 16px。**iOS Safari 对更小的输入框会自动放大整页**，
+   那一下会让用户以为页面坏了，而且缩不回去。 */
+:where(input, textarea, select) {
+  font-size: max(16px, 1em);
+}
+
+/* 标题收紧字距、断行更均匀。中文标题本身不需要 tracking，
+   但混排里的数字和西文需要——所以只给一点点。 */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.011em;
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* **键盘焦点必须看得见。** 默认 outline 在圆角控件上是方的，
+   看起来像出了错；统一成跟随圆角的一圈。 */
+:where(a, button, [role="checkbox"], [role="radio"], input, textarea):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-inner);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-ink);
+}
+
+/* 可点的东西都要有过渡。没有过渡的界面按下去像刷新了一下，
+   而不是"我点了它"。 */
+:where(a, button) {
+  transition:
+    color 140ms ease,
+    background-color 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
 }
 
 /* 减少动效偏好：不做例外 */

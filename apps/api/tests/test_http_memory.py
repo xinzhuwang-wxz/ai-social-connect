@@ -33,7 +33,7 @@ from cofield.adapters.persistence.memory import (
     MemoryFacet,
     MemoryRepository,
 )
-from cofield.adapters.persistence.schema import memory_facets
+from cofield.adapters.persistence.schema import event_members, memory_facets
 
 CAMPUS = "demo-campus"
 
@@ -605,3 +605,161 @@ def test_a_record_card_never_carries_a_score(client: TestClient) -> None:
 
     assert not fields & {"score", "rating", "reliability", "confidence", "level"}
     assert {"sources", "drafted_by_agent"} <= fields
+
+
+# --- 做过的事变成"我会什么" ---
+
+
+def test_a_record_i_nodded_at_becomes_something_i_can_do(
+    engine: Engine, client: TestClient, me: Any
+) -> None:
+    """他点头承认的这句话说到一样本事，那就是他会的。
+
+    这是「一个人由什么表达」的第三条来源，也是唯一一条来自**做过的事**
+    而不是说过的话的：做完一件事，系统从留下的东西里写出一句
+    「这次的片子是他剪的」，他看过、点了头——到这一步，"会剪辑"已经比
+    任何一张勾选表都更实在。
+
+    在这条回流之前，这句话只能被引用进证明，**不参与找人**：
+    做过十次剪辑的人，下一次仍然不出现在任何缺剪辑的人的候选里。
+    """
+    facet_id = a_record(engine, me.id)  # 「他做完过一支 60 秒短片，负责剪辑」
+    assert "剪辑" not in client.get("/api/me/profile").json()["skills"]
+
+    client.post(f"/api/facets/{facet_id}:confirm")
+
+    assert "剪辑" in client.get("/api/me/profile").json()["skills"]
+
+
+def test_a_guess_i_have_not_nodded_at_counts_for_nothing(
+    engine: Engine, client: TestClient, me: Any
+) -> None:
+    """系统猜的那一版什么都不算——这正是那道门存在的意义。"""
+    a_record(engine, me.id)
+
+    assert client.get("/api/me/profile").json()["skills"] == []
+
+
+# --- 照上次再来一次 ---
+
+
+def test_doing_it_again_starts_from_a_draft_not_a_new_thing(
+    engine: Engine, client: TestClient, me: Any, seed_principal: Any
+) -> None:
+    """带过来的东西要让本人过目。
+
+    **尤其是时间和地点——它们必然是新的。** 抽取只产出草稿这条规矩在这里
+    同样成立：直接建一条新需求，等于替他决定了这次要做的和上次一模一样。
+    """
+    mate = seed_principal(name="苏晚")
+    event_id = an_event(engine, [me.id, mate.id])
+
+    body = client.get(f"/api/events/{event_id}/again").json()
+
+    assert body["goal"], "说不出上次做的是什么"
+    assert body["last_time_with"], "不知道上次和谁一起"
+    # 缺什么由本人重填：上次缺的这次未必缺，带过来一个错的比空着糟。
+    assert body["needs"] == []
+
+
+def test_someone_who_was_not_there_cannot_reuse_it(
+    engine: Engine, client: TestClient, me: Any, seed_principal: Any
+) -> None:
+    """不在那件事里的人翻不出它。404 而不是 403——403 等于确认了它存在。"""
+    other = seed_principal(name="路人")
+    event_id = an_event(engine, [other.id])
+
+    assert client.get(f"/api/events/{event_id}/again").status_code == 404
+
+
+def test_asking_them_again_makes_a_proposal_not_a_membership(
+    engine: Engine, client: TestClient, me: Any, seed_principal: Any
+) -> None:
+    """「一键重新邀请」邀的是**答复**，不是人。
+
+    不变量 3：成局前只有提案，没有关系。所以按完之后那几个人各自多了
+    一条待答复，而这件事的成员一个没变——把他们直接算进去，等于系统
+    替他们答应了。
+    """
+    mate = seed_principal(name="苏晚")
+    _can(engine, mate.id, ["拍摄", "剪辑"])
+    event_id = an_event(engine, [me.id, mate.id])
+    intent_id = _a_confirmed_intent(client)
+
+    before = _members_of(engine, event_id)
+    res = client.post(
+        f"/api/events/{event_id}:again",
+        json={"intent_id": str(intent_id), "invite": [str(mate.id)]},
+    )
+
+    assert res.status_code == 200, res.text
+    assert _members_of(engine, event_id) == before, "把人直接算进了旧事件"
+
+
+def test_pressing_ask_them_again_twice_does_not_ask_twice(
+    engine: Engine, client: TestClient, me: Any, seed_principal: Any
+) -> None:
+    """按第二次问不出去。
+
+    清算那条路一直守着"同一件事不问第二遍"，而这条路是**人主动按的**，
+    没有清算边界可依——挡在界面上的"按过了"刷新一下就没了，于是同一批
+    人会收到第二条待答复。
+
+    边界只能画在"上一份还活着"上：还有人等着答复，就不再发。
+    """
+    mate = seed_principal(name="苏晚")
+    _can(engine, mate.id, ["拍摄", "剪辑"])
+    event_id = an_event(engine, [me.id, mate.id])
+    intent_id = _a_confirmed_intent(client)
+    body = {"intent_id": str(intent_id), "invite": [str(mate.id)]}
+
+    first = client.post(f"/api/events/{event_id}:again", json=body).json()["asked"]
+    second = client.post(f"/api/events/{event_id}:again", json=body).json()["asked"]
+
+    # 第一次问没问出去（比如这几个人这次凑不成组）时，这条断言什么也
+    # 证明不了——那种情况下两次都是 0，测试会假绿。
+    assert first == 1, "第一次就没问出去，后面这条断言证明不了幂等"
+    assert second == 0, "按第二次又问了一遍同一批人"
+
+
+def _a_confirmed_intent(client: TestClient) -> UUID:
+    """一条真的能拿去找人的需求。草稿不行——那道门是这个产品的地基。
+
+    **只缺一个人。** 抽取那句话得到的是"三四个人"，而这两条测试的校园里
+    只有两个真人——凑不成组的时候两次都返回 0，幂等那条断言会假绿。
+    要验的是"问过第二遍没有"，就不能让它先倒在"根本没问出去"上。
+    """
+    compiled = client.post(
+        "/api/intents:compile",
+        json={"expression": "想再做一支一分钟的校园短片，这周内完成。我会写脚本，缺剪辑"},
+    ).json()
+    content = {k: v for k, v in compiled["content"].items() if k != "uncertain_fields"}
+    content["needs"] = ["剪辑"]
+    content["team_size"] = {"minimum": 2, "maximum": 2}
+    created = client.post(
+        "/api/intents", json={"expression": "再做一支短片", "content": content}
+    ).json()
+    client.post(f"/api/intents/{created['id']}:confirm")
+    return UUID(created["id"])
+
+
+def _can(engine: Engine, principal_id: UUID, skills: list[str]) -> None:
+    """让这个人真的会点什么。**走本人那一面的写入口**，不直接塞列——
+    "谁写这一列"正是这个产品曾经整体缺过的那一环。"""
+    from cofield.adapters.clock import SimulatedClock
+    from cofield.adapters.persistence.principals import PrincipalRepository
+
+    with campus_connection(engine, CAMPUS) as conn:
+        PrincipalRepository(conn, SimulatedClock(NOW)).describe(
+            principal_id, skills=skills, open_to=[], self_intro=None, zone=None
+        )
+
+
+def _members_of(engine: Engine, event_id: UUID) -> set[UUID]:
+    with campus_connection(engine, CAMPUS) as conn:
+        rows = conn.execute(
+            sa.select(event_members.c.principal_id).where(
+                event_members.c.event_id == event_id
+            )
+        ).all()
+    return {r.principal_id for r in rows}

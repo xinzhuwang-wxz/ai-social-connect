@@ -65,7 +65,11 @@ def _clear_market(engine: Engine):  # type: ignore[no-untyped-def]
     """意图与提案每个用例之间清掉，人口留着。"""
     yield
     with owner_connection(engine) as conn:
-        conn.execute(sa.text("TRUNCATE intent_signals, formation_proposals CASCADE"))
+        conn.execute(
+            sa.text(
+                "TRUNCATE intent_signals, formation_proposals, seed_deliveries CASCADE"
+            )
+        )
 
 
 def _intent(
@@ -169,9 +173,12 @@ def test_batching_stops_one_person_from_being_everyones_answer(
     逐条求解时每条都对着全校独立解，谁先提交谁把稀缺的人占走；
     攒着一起解，系统才第一次看见这几个人在抢同一批人。
 
-    六条都缺调色的需求，三千人里只有四十来个会调色的。
+    二十条都缺调色的需求，三千人里只有四十来个会调色的。
+
+    条数要够多才抢得起来：一条种子只投给三个人，六条一共十八份，
+    在四十个候选里几乎不重叠——**那时候这个用例什么都没测到**。
     """
-    people = campus.people[:6]
+    people = campus.people[:20]
     intents = [
         _intent(
             p.id,
@@ -188,7 +195,11 @@ def test_batching_stops_one_person_from_being_everyones_answer(
         _clear(engine, now=NOW)
     greedy = _exposure(engine)
     with owner_connection(engine) as conn:
-        conn.execute(sa.text("TRUNCATE intent_signals, formation_proposals CASCADE"))
+        conn.execute(
+            sa.text(
+                "TRUNCATE intent_signals, formation_proposals, seed_deliveries CASCADE"
+            )
+        )
 
     # 批量：攒齐了一起解。
     _save(engine, *intents, now=NOW)
@@ -203,19 +214,19 @@ def test_batching_stops_one_person_from_being_everyones_answer(
 
 
 def _exposure(engine: Engine) -> Counter[UUID]:
-    """每个人被提案给了几条**不同的需求**。
+    """一个人这一轮收到了几颗**不同需求**的种子。
 
-    按不同需求计数而不是按组数：一个人出现在给同一个人的两个备选队里
-    是正常的，那是同一次提案的两个选项。
+    投递制之后（ADR 0010）这里数的是投递，不是提案——但要防的东西没变：
+    一个人被当成六条需求的答案，他会收到六颗种子，而那和收到垃圾邮件
+    没有区别。
     """
     with campus_connection(engine, SIM) as conn:
         rows = conn.execute(
-            sa.text("SELECT intent_id, member_ids FROM formation_proposals")
+            sa.text("SELECT intent_id, principal_id FROM seed_deliveries")
         ).all()
     seen: dict[UUID, set[UUID]] = {}
     for row in rows:
-        for member in row.member_ids:
-            seen.setdefault(member, set()).add(row.intent_id)
+        seen.setdefault(row.principal_id, set()).add(row.intent_id)
     return Counter({k: len(v) for k, v in seen.items()})
 
 
@@ -306,8 +317,9 @@ def test_running_twice_in_the_same_window_does_not_duplicate(
 ) -> None:  # type: ignore[no-untyped-def]
     """清算重复调用是安全的。
 
-    `cleared_at` 记的是**边界时刻**而不是"跑这一次的时刻"，所以
-    同一个窗口内幂等——运维重跑一次不会让用户收到两批一样的小队。
+    `cleared_at` 记的是**边界时刻**而不是"跑这一次的时刻"，所以同一个窗口内
+    幂等。投递制之后这一条更要紧了：不幂等的后果不是"多出一支队"，
+    是候选那一侧收到一封又一封"有人想找你"——像垃圾邮件。
     """
     person = campus.people[40]
     intent = _intent(
@@ -317,15 +329,24 @@ def test_running_twice_in_the_same_window_does_not_duplicate(
     )
     _save(engine, intent, now=NOW)
 
-    first = _clear(engine, now=NOW)
-    second = _clear(engine, now=NOW + timedelta(minutes=3))
+    _clear(engine, now=NOW)
+    after_one = _delivered(engine, intent.id)
+    second = _clear(engine, now=NOW)
 
-    assert first.considered == 1
-    assert second.considered == 0
+    assert after_one, "第一次就没投出去，这个用例测不到东西"
+    assert _delivered(engine, intent.id) == after_one, "重跑一次又投了一批"
+    assert second.proposed == 0
 
+
+def _delivered(engine: Engine, intent_id: UUID) -> set[UUID]:
     with campus_connection(engine, SIM) as conn:
-        stored = ProposalRepository(conn, SIM).list_for_intent(intent.id, now=NOW)
-    assert len(stored) == first.proposed
+        rows = conn.execute(
+            sa.text(
+                "SELECT principal_id FROM seed_deliveries WHERE intent_id = :i"
+            ),
+            {"i": intent_id},
+        ).all()
+    return {r.principal_id for r in rows}
 
 
 # --- 等待期间看得到什么 ---
@@ -456,10 +477,11 @@ def test_at_most_three_teams_are_offered(engine: Engine, campus) -> None:  # typ
     assert len(stored) <= 3
 
 
-def test_expired_proposals_are_not_shown(engine: Engine, campus) -> None:  # type: ignore[no-untyped-def]
-    """过了有效期，被提案的人很可能已经答应了别的事。
+def test_a_seed_says_why_it_came_to_you(engine: Engine, campus) -> None:  # type: ignore[no-untyped-def]
+    """投出去的每一颗种子都要说得出为什么投给他。
 
-    再展示等于让用户白跑一趟。
+    **不给分数，不给相似度。** "他会剪辑，而你缺剪辑"是用户能判断的话，
+    0.71 不是。说不出来就说不出来——编一条理由比不给理由伤害大。
     """
     person = campus.people[100]
     intent = _intent(
@@ -471,12 +493,16 @@ def test_expired_proposals_are_not_shown(engine: Engine, campus) -> None:  # typ
     _clear(engine, now=NOW)
 
     with campus_connection(engine, SIM) as conn:
-        repo = ProposalRepository(conn, SIM)
-        fresh = repo.list_for_intent(intent.id, now=NOW)
-        stale = repo.list_for_intent(intent.id, now=NOW + timedelta(days=30))
+        rows = conn.execute(
+            sa.text("SELECT why FROM seed_deliveries WHERE intent_id = :i"),
+            {"i": intent.id},
+        ).all()
 
-    assert fresh
-    assert stale == []
+    assert rows, "一颗都没投出去"
+    for row in rows:
+        assert row.why, "投给他却说不出为什么"
+        joined = "".join(row.why)
+        assert "%" not in joined and "分" not in joined, joined
 
 
 def test_proposals_stay_inside_their_tenant(engine: Engine, campus) -> None:  # type: ignore[no-untyped-def]
@@ -498,15 +524,12 @@ def test_proposals_stay_inside_their_tenant(engine: Engine, campus) -> None:  # 
     assert leaked == []
 
 
-def test_a_proposal_arrives_with_its_answer_slots_already_open(
-    engine: Engine, campus
-) -> None:  # type: ignore[no-untyped-def]
-    """**产出提案的人必须同时把待答复开好。**
+def test_a_seed_lands_answerable(engine: Engine, campus) -> None:  # type: ignore[no-untyped-def]
+    """投到的那一刻它就是可以答的。
 
-    少了这一步整条主路径是断的：用户拿到小队、点「我加入」，收到的是
-    一句"这个人不在这一版条款的名单里"。而确认门刻意不静默创建承诺
-    （否则任何人都能给任意提案投票），所以这根线只能由这一侧接上——
-    只有它知道这一版条款的名单是谁。
+    投递制下这一条比提案时代简单得多：一条投递记录本身就是"可以答"，
+    不需要另一侧再去把待答复开好。**少一个必须记得接上的地方，
+    就少一个会断的地方。**
     """
     person = campus.people[120]
     intent = _intent(
@@ -516,33 +539,26 @@ def test_a_proposal_arrives_with_its_answer_slots_already_open(
     )
     _save(engine, intent, now=NOW)
     report = _clear(engine, now=NOW)
-    assert report.proposed > 0, "这个用例需要真的配出小队"
+    assert report.proposed > 0, "这个用例需要真的投出去"
 
     with campus_connection(engine, SIM) as conn:
-        rows = conn.execute(
-            sa.text(
-                "SELECT p.id, p.member_ids, "
-                "  (SELECT count(*) FROM commitments c WHERE c.proposal_id = p.id) AS opened "
-                "FROM formation_proposals p"
-            )
+        states = conn.execute(
+            sa.text("SELECT state FROM seed_deliveries WHERE intent_id = :i"),
+            {"i": intent.id},
         ).all()
 
-    assert rows
-    for row in rows:
-        assert row.opened == len(row.member_ids), (
-            f"提案 {row.id} 有 {len(row.member_ids)} 个成员，"
-            f"却只开了 {row.opened} 条待答复——他们点「我加入」会被拒"
-        )
+    assert states
+    assert all(r.state == "delivered" for r in states)
 
 
-def test_an_intent_without_a_deadline_still_gets_usable_proposals(
+def test_an_intent_without_a_deadline_still_gets_delivered(
     engine: Engine, campus
 ) -> None:  # type: ignore[no-untyped-def]
-    """没写截止期的需求，提案不能一生成就过期。
+    """没写截止期的需求照样投得出去。
 
-    这里原来拿 `EPOCH`（窗口对齐用的固定基准，2026-01-01）当"现在"算兜底
-    截止期，于是 `expires_at` 落在**过去**——清算日志显示产出了六个提案，
-    而用户那一屏永远是空的。**静默**是最坏的部分。
+    这里原来拿 `EPOCH`（窗口对齐用的固定基准）当"现在"算兜底截止期，
+    于是产出的东西一生成就过期——日志显示一切正常，而用户那一屏永远是空的。
+    **静默是最坏的部分。**
     """
     person = campus.people[130]
     intent = _intent(
@@ -550,15 +566,10 @@ def test_an_intent_without_a_deadline_still_gets_usable_proposals(
         created_at=NOW - timedelta(hours=12),
         deadline=NOW + timedelta(days=7),
     )
-    # 去掉时间窗，走兜底那条路。
-    intent = replace(
-        intent, content=replace(intent.content, time_window=None)
-    )
+    intent = replace(intent, content=replace(intent.content, time_window=None))
     _save(engine, intent, now=NOW)
-    report = _clear(engine, now=NOW)
-    assert report.proposed > 0
+    _clear(engine, now=NOW)
 
-    with campus_connection(engine, SIM) as conn:
-        usable = ProposalRepository(conn, SIM).list_for_intent(intent.id, now=NOW)
+    assert _delivered(engine, intent.id), "没写截止期就一颗都投不出去"
 
-    assert usable, "提案一生成就过期了——用户永远拿不到小队"
+

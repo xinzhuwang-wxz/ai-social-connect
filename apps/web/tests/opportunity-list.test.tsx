@@ -163,7 +163,7 @@ describe("这是不是一个假项目", () => {
 
     const who = within(await screen.findByRole("article", { name: FILM.title }));
     expect(who.getByText("青影社")).toBeVisible();
-    expect(who.getByText("校园核过这个组织")).toBeVisible();
+    expect(who.getByLabelText("校园核过这个组织")).toBeVisible();
   });
 
   it("没核过的组织标得很显眼，并说清该怎么办", async () => {
@@ -258,7 +258,7 @@ describe("五态", () => {
     render(<OpportunityList />);
 
     expect(await screen.findByText(/能补上你缺口的排在前面/)).toBeVisible();
-    expect(screen.getByText(/还缺什么、缺几个、谁负责/)).toBeVisible();
+    expect(screen.getByText(/带 ✓ 的组织学校核过/)).toBeVisible();
   });
 
   it("加载：给骨架，不是一片空白", () => {
@@ -358,6 +358,86 @@ describe("语言", () => {
 
     await screen.findByRole("article", { name: FILM.title });
     expect(document.body.textContent ?? "").not.toMatch(/%|％|百分|匹配度|得分|评分/);
+  });
+});
+
+/**
+ * 信息层次：默认收起，点开看细节。
+ *
+ * 这组断言守住三件事：
+ * 1. 不展开时摘要行就能给出最重要的三项（组织、角色缺口、截止期）。
+ * 2. 展开按钮的 aria-expanded 状态正确——屏幕阅读器靠它知道内容是收着还是展开的。
+ * 3. 和我技能对上的那条标记出现在摘要区，不需要展开才能看到。
+ */
+describe("信息层次", () => {
+  it("默认不展开时，摘要行已经能看到组织、角色缺口和截止期", async () => {
+    mockApi();
+    render(<OpportunityList />);
+
+    const card = await screen.findByRole("article", { name: FILM.title });
+
+    // 组织名在摘要行
+    expect(within(card).getByText("青影社")).toBeVisible();
+
+    // 角色缺口以"角色 缺N个"的紧凑格式出现在摘要行（不需要展开）
+    const compact = within(card).getByLabelText("缺口摘要");
+    expect(compact.textContent).toContain("剪辑");
+    expect(compact.textContent).toContain("缺2个");
+
+    // 截止期在摘要行
+    expect(within(card).getByText(/截止/)).toBeVisible();
+
+    // 展开按钮默认是收起状态
+    expect(within(card).getByRole("button", { name: "查看负责人和要求" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("点开展开按钮后 aria-expanded 变为 true，可以看到负责人", async () => {
+    mockApi();
+    render(<OpportunityList />);
+
+    const card = await screen.findByRole("article", { name: FILM.title });
+    const toggle = within(card).getByRole("button", { name: "查看负责人和要求" });
+
+    // 展开前是收着的
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(toggle);
+
+    // 展开后状态变了，"收起"取代了"查看"
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveTextContent("收起");
+  });
+
+  it("技能对上的那条有明显标记，不需要展开就能看到", async () => {
+    // 我会剪辑，FILM 缺剪辑——标记应该在摘要区
+    mockApi();
+    render(<OpportunityList />);
+
+    const card = await screen.findByRole("article", { name: FILM.title });
+
+    // 标记在卡片里，且不依赖展开状态（没有被展开按钮挡着）
+    expect(within(card).getByText("你说过你能做剪辑，这里正缺。")).toBeVisible();
+
+    // 没有技能匹配的那张卡里没有这句话
+    const robot = await screen.findByRole("article", { name: ROBOT.title });
+    expect(within(robot).queryByText(/你说过你能做/)).toBeNull();
+  });
+
+  it("展开再收起，aria-expanded 回到 false", async () => {
+    mockApi();
+    render(<OpportunityList />);
+
+    const card = await screen.findByRole("article", { name: FILM.title });
+    const toggle = within(card).getByRole("button", { name: "查看负责人和要求" });
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 });
 

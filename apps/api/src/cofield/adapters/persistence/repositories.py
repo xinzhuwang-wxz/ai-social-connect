@@ -15,6 +15,7 @@ from sqlalchemy import Connection
 from cofield.domain.ports.clock import Clock
 
 from .consent import ConsentRepository, EnvelopeRepository
+from .events import EventRepository
 from .intents import IntentRepository
 from .opportunities import OpportunityRepository, OrganizationRepository
 from .principals import PrincipalRepository
@@ -42,6 +43,10 @@ class Repositories:
     @cached_property
     def intents(self) -> IntentRepository:
         return IntentRepository(self._conn, self._clock, self._campus)
+
+    @cached_property
+    def events(self) -> EventRepository:
+        return EventRepository(self._conn, self._campus)
 
     @cached_property
     def organizations(self) -> OrganizationRepository:

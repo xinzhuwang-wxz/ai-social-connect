@@ -183,6 +183,48 @@ class EventRepository:
             )
         ).scalar_one_or_none()
 
+    def formed_from(self, proposal_id: UUID) -> tuple[UUID, UUID | None] | None:
+        """这个提案成的那件事，和它的空间。都点头之后才有。
+
+        **不是给「答复的那一瞬间」用的**，是给之后每一次打开用的：
+        原先事件 id 与空间 id 只在 `:decide` 的响应里出现一次，于是最后
+        点头的那个人看得到入口，其余的人和**任何一次刷新**看到的都是
+        一句「都点头了，这件事成了。」——**刚答应下来的那件事没有门。**
+        """
+        row = self._conn.execute(
+            sa.select(shared_events.c.id, spaces.c.id.label("space_id"))
+            .select_from(
+                shared_events.outerjoin(spaces, spaces.c.event_id == shared_events.c.id)
+            )
+            .where(shared_events.c.proposal_id == proposal_id)
+        ).one_or_none()
+        return (row.id, row.space_id) if row is not None else None
+
+    def complete(self, event_id: UUID) -> bool:
+        """这件事做完了。
+
+        ## 在这个方法存在之前，没有任何代码写过这个状态
+
+        而读的那一侧全都在等它：森林里「这件事做成了」、成长档位到「开花了」、
+        「这次留下了什么」、「照这个再来一次」、以及关于我的记录能不能收割。
+        它们**一条都不可能发生**——建好了一整条下游，源头那一笔从没写过。
+
+        ## 谁有资格调它
+
+        只有"全员各自说了做完"那一处（`POST /spaces/{id}/done`）。
+        一个人说做完了就置完成，等于让他替所有人宣布，而这件事会写进
+        每个人的森林。
+
+        已经是 completed 的返回 False：重复调用不产生第二次完成。
+        """
+        result = self._conn.execute(
+            sa.update(shared_events)
+            .where(shared_events.c.id == event_id)
+            .where(shared_events.c.state == "active")
+            .values(state="completed")
+        )
+        return result.rowcount > 0
+
     def count_edges(self, principal_id: UUID) -> int:
         """这个人身上有几条关系边。
 

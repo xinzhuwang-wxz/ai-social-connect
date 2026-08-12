@@ -236,3 +236,74 @@ def test_the_clock_flows_all_the_way_through(
         - datetime.fromisoformat(first["created_at"])
         == timedelta(days=1)
     )
+
+
+def test_a_brand_new_visitor_can_save_their_first_thing(engine: Engine) -> None:
+    """**一个刚打开这个网页的人，第一次保存就该成功。**
+
+    身份是外部给的（请求头，将来是校园 OIDC 的声明），而 `intent_signals`
+    的外键指向 `principals`。少了「第一次见到就把行建出来」这一步，
+    他会得到一句「没能保存，稍后再试」——而那是他对这个产品的第一印象。
+
+    这个洞躲过了几百个后端测试，因为它们的 fixture 都先把人建好了。
+    只有一个**全新的、库里没有的**身份才碰得到，所以这条用例刻意不用
+    `me` fixture。
+    """
+    from fastapi.testclient import TestClient as _Client
+
+    from cofield.http import deps
+    from cofield.http.app import create_app
+
+    stranger = uuid4()
+    app = create_app()
+    app.dependency_overrides[deps.get_engine] = lambda: engine
+    with _Client(app) as client:
+        client.headers.update(
+            {"X-Principal-Id": str(stranger), "X-Campus-Id": "demo-campus"}
+        )
+        response = client.post(
+            "/api/intents",
+            json={
+                "expression": "想拍支短片，缺个会剪辑的",
+                "content": {
+                    "goal": "拍一支短片",
+                    "offers": [],
+                    "needs": ["剪辑"],
+                    "team_size": {"minimum": 2, "maximum": 3},
+                },
+            },
+        )
+
+    assert response.status_code == 201, response.text
+
+
+def test_the_new_visitor_gets_a_name_that_is_not_everyone_elses(
+    engine: Engine,
+) -> None:
+    """两个人在群聊里长得一模一样，比一个占位名更糟。
+
+    真名来自校园身份，不该由用户随手填——但在那之前，至少得分得开。
+    """
+    from fastapi.testclient import TestClient as _Client
+
+    from cofield.adapters.clock import SystemClock
+    from cofield.adapters.persistence.engine import campus_connection
+    from cofield.adapters.persistence.principals import PrincipalRepository
+    from cofield.http import deps
+    from cofield.http.app import create_app
+
+    app = create_app()
+    app.dependency_overrides[deps.get_engine] = lambda: engine
+    strangers = [uuid4(), uuid4()]
+    for who in strangers:
+        with _Client(app) as client:
+            client.headers.update(
+                {"X-Principal-Id": str(who), "X-Campus-Id": "demo-campus"}
+            )
+            client.get("/api/me/intents")
+
+    with campus_connection(engine, "demo-campus") as conn:
+        repo = PrincipalRepository(conn, SystemClock())
+        names = {repo.get(who).display_name for who in strangers}  # type: ignore[union-attr]
+
+    assert len(names) == 2, "两个新人在屏幕上完全一样"

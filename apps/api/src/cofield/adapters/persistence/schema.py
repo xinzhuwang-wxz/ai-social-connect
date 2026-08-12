@@ -47,6 +47,12 @@ principals = sa.Table(
     # 用方言 ARRAY 而不是通用 ARRAY：硬过滤要用 `&&` 重叠运算符，
     # 通用类型没有这个比较器。生成的 DDL 相同。
     sa.Column("skills", PgArray(sa.Text), nullable=False, server_default="{}"),
+    #: 我想参与的方向。和 `skills` 分开是因为它们在求解器里地位不同：
+    #: `skills` 是"我能补上的洞"（ROLE_COVERAGE 只认它），这一列是
+    #: "我想参与的方向"——**只放宽召回，不放宽承诺**。
+    #: 说"想参与拍短片"的人可以被叫来一起做，但不会被当成会剪辑的人
+    #: 塞进剪辑那个坑里。
+    sa.Column("open_to", PgArray(sa.Text), nullable=False, server_default="{}"),
     #: 21 位周课表掩码（7 天 × 上午/下午/晚上），1 表示有空。
     #: 整组共同空闲 = 按位与。真正咬人的约束是"连续两段"而不是"任意一段"。
     sa.Column("availability", sa.Text),
@@ -57,6 +63,7 @@ principals = sa.Table(
     sa.Index("ix_principals_campus", "campus_id"),
     sa.Index("ix_principals_campus_synthetic", "campus_id", "is_synthetic"),
     sa.Index("ix_principals_skills", "skills", postgresql_using="gin"),
+    sa.Index("ix_principals_open_to", "open_to", postgresql_using="gin"),
     sa.Index("ix_principals_campus_zone", "campus_id", "zone"),
 )
 
@@ -85,6 +92,9 @@ intent_signals = sa.Table(
     #: 属于哪个行动类别。撮合窗口长度由它决定，所以它是真列不是 extras 里的键——
     #: 清算时要按它分组查询。可空：用户可以不挑场景直接写一句话。
     sa.Column("action_kind", sa.Text),
+    #: 这条需求问谁：campus（全校）/ known（一起做成过事的人）。
+    #: **和逐项授权是两个轴**：授权决定露出什么，这一列决定问谁。
+    sa.Column("reach", sa.Text, nullable=False, server_default="campus"),
     #: 行动类别注册表声明的扩展字段。新增类别不改表结构。
     sa.Column("extras", sa.JSON, nullable=False, server_default="{}"),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
@@ -187,6 +197,102 @@ EMBEDDING_DIMENSIONS = 1024
 #:
 #: 它承载的是 schema 装不下的那部分表达：「想找个写朋克风格文案的」
 #: 没有任何结构化字段能装，但原话里有。
+#: 行动确认卡。PRD 称它是**最重要的中间转化节点**：
+#: 从一句模糊的"有空一起"，变成一项明确的共同承诺。
+#:
+#: 它和成局那道门不是一回事——那道门问"要不要和这几个人组队"，
+#: 这张卡问"我们要做的到底是什么"。混成一张，用户点一次头就同时答应了
+#: 两个不同的问题，而事后查不出他同意的是哪一个。
+action_plans = sa.Table(
+    "action_plans",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("space_id", sa.Uuid, nullable=False),
+    sa.Column("title", sa.Text, nullable=False),
+    #: 空表示还没定。**没定就是没定，不猜一个**。
+    sa.Column("starts_at", sa.TIMESTAMP(timezone=True)),
+    sa.Column("place", sa.Text),
+    sa.Column("bring", sa.Text),
+    sa.Column("budget", sa.Text),
+    #: 有变怎么办。临时变更是行动最常见的死因，PRD 明确要求这一项。
+    sa.Column("change_note", sa.Text),
+    #: 这一版内容的摘要。**点头记在它上面**——任何一项改动都换一个摘要，
+    #: 于是"我点头时地点是北门，后来被改成南门"不可能发生。
+    sa.Column("digest", sa.Text, nullable=False),
+    sa.Column("created_by", sa.Uuid, nullable=False),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.UniqueConstraint("space_id", name="uq_plan_per_space"),
+    sa.Index("ix_plans_campus", "campus_id"),
+)
+
+plan_nods = sa.Table(
+    "plan_nods",
+    metadata,
+    sa.Column("plan_id", sa.Uuid, primary_key=True),
+    sa.Column("principal_id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    #: 他点头时那一版的摘要。和现行摘要对不上，这次点头就不算数。
+    sa.Column("digest", sa.Text, nullable=False),
+    sa.Column("nodded_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_nods_campus", "campus_id"),
+)
+
+#: 到那天了，每个人此刻的处境。
+#:
+#: **不是空间条目。** 条目是"要做的事"：有负责人、有截止、进不进度。
+#: 而"我出发了"是一个人此刻的处境——每人一条、会来回改、行动结束就没意义。
+#: 混进条目里，进度条会被一堆"我到了"顶满（不变量 6）。
+day_of_states = sa.Table(
+    "day_of_states",
+    metadata,
+    sa.Column("space_id", sa.Uuid, primary_key=True),
+    sa.Column("principal_id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    #: ready / leaving / arrived / changed
+    sa.Column("state", sa.Text, nullable=False),
+    #: 「临时有变」要能说一句为什么——不说就只是一个让人干着急的标记。
+    sa.Column("note", sa.Text),
+    sa.Column("updated_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_day_of_campus", "campus_id"),
+)
+
+#: 谁点过"做完了"。**全员点头才算完成**——一个人说做完了就标记完成，
+#: 等于让他替所有人宣布，而这件事会写进每个人的森林。
+done_marks = sa.Table(
+    "done_marks",
+    metadata,
+    sa.Column("space_id", sa.Uuid, primary_key=True),
+    sa.Column("principal_id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("marked_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_done_campus", "campus_id"),
+)
+
+#: 一颗种子投到了谁那里。
+#:
+#: **它是一对一的**：每个候选各自一条，各自有状态和留言。塞进
+#: `formation_proposals` 的话，`member_ids` 会同时表示"一支队的成员"和
+#: "一批互不相干的候选人"——那正是"一个字段两种含义"的开始。
+seed_deliveries = sa.Table(
+    "seed_deliveries",
+    metadata,
+    sa.Column("intent_id", sa.Uuid, primary_key=True),
+    sa.Column("principal_id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    #: delivered / willing / passed / chosen / closed
+    sa.Column("state", sa.Text, nullable=False, server_default="delivered"),
+    #: 说「愿意」时可以附一句话。**可选**——要求写理由会让人不敢点愿意。
+    sa.Column("note", sa.Text),
+    sa.Column("why", sa.JSON, nullable=False, server_default="[]"),
+    sa.Column("rank", sa.Integer, nullable=False, server_default="0"),
+    sa.Column("delivered_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Column("answered_at", sa.TIMESTAMP(timezone=True)),
+    sa.Index("ix_deliveries_inbox", "campus_id", "principal_id", "state"),
+    sa.Index("ix_deliveries_intent", "campus_id", "intent_id"),
+)
+
 semantic_index = sa.Table(
     "semantic_index",
     metadata,
@@ -554,4 +660,9 @@ RLS_TABLES: tuple[str, ...] = (
     "evidence",
     "memory_facets",
     "space_messages",
+    "action_plans",
+    "plan_nods",
+    "day_of_states",
+    "done_marks",
+    "seed_deliveries",
 )

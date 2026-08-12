@@ -13,7 +13,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { EchoScreen } from "@/components/echo-screen";
-import type { Echo } from "@/lib/invitations";
+import type { Echo, Intent } from "@/lib/invitations";
 import type { MyRecord, MyRecords } from "@/lib/me";
 
 const EVENT = "11111111-1111-4111-8111-111111111111";
@@ -23,8 +23,31 @@ const KEPT = "44444444-4444-4444-8444-444444444444";
 const FILM = "77777777-7777-4777-8777-777777777777";
 const BOARD = "88888888-8888-4888-8888-888888888888";
 const WRITTEN = "99999999-9999-4999-8999-999999999999";
+const SU_ID = "55555555-5555-4555-8555-555555555555";
+const INTENT_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
+
+/** 已确认的、可参与配队的需求。上次那几个人就靠它被问到。 */
+const MATCHABLE_INTENT: Intent = {
+  id: INTENT_ID,
+  principal_id: ME,
+  state: "confirmed",
+  raw_expression: "再拍一支短片",
+  content: {
+    goal: "再拍一支短片",
+    offers: [],
+    needs: [],
+    boundaries: [],
+    open_questions: [],
+    uncertain_fields: [],
+  },
+  created_at: inHours(-1),
+  expires_at: null,
+  is_matchable: true,
+  action_kind: null,
+  reach: "campus",
+};
 
 const GUESS_TEXT = "他在这次里做了剪辑和调色";
 const KEPT_TEXT = "他做完过一支 60 秒短片，负责剪辑";
@@ -112,6 +135,9 @@ type Options = {
   echoStatus?: number;
   recordsStatus?: number;
   writeStatus?: number;
+  /** 不传表示没有可用需求（InviteSection 不显示）。 */
+  intents?: Intent[];
+  askAgainStatus?: number;
   hang?: boolean;
 };
 
@@ -162,6 +188,28 @@ function mockApi(opts: Options = {}): Call[] {
       // 每次都发一份新的：真实的 HTTP 不会让界面和桩共用同一个数组，
       // 共用的话"界面自己加进去的那一条"和"桩里已经有的那一条"会变成同一条，
       // 于是一个本该抓到重复的断言反而通过了。
+      if (url === `/api/events/${EVENT}/again`) {
+        return reply({
+          goal: "拍一支 60 秒短片",
+          offers: ["写脚本"],
+          needs: [],
+          team_min: 2,
+          team_max: 2,
+          last_time_with: [
+            { principal_id: SU_ID, display_name: "苏晚" },
+          ],
+        });
+      }
+      // POST /api/events/{id}:again（注意冒号，不是斜杠）——问上次那几个人
+      if (url === `/api/events/${EVENT}:again` && method === "POST") {
+        return opts.askAgainStatus
+          ? reply({ detail: "没发出去" }, opts.askAgainStatus)
+          : reply({ asked: 1 });
+      }
+      // 我发过的、可参与配队的需求。不传 intents 表示没有（InviteSection 不显示）。
+      if (url === "/api/me/intents") {
+        return reply(opts.intents ?? []);
+      }
       if (url === `/api/events/${EVENT}/echo`) {
         return opts.echoStatus
           ? reply({ detail: "没连上" }, opts.echoStatus)
@@ -584,3 +632,68 @@ function expectNoDomainWords(text: string) {
     expect(text).not.toContain(term);
   }
 }
+
+describe("再来一次", () => {
+  it("看完这次留下什么，给一条通往下一次的路", async () => {
+    // PRD 的最后一段：第一次行动完成后进入下一轮 Loop。
+    // 在它之前，森林里的一株点进去只能看。
+    mockApi();
+    render(<EchoScreen eventId={EVENT} />);
+
+    const card = await screen.findByRole("region", { name: "再来一次" });
+    expect(within(card).getByText(/上次是和苏晚一起做的/)).toBeVisible();
+    expect(
+      within(card).getByRole("link", { name: "照这个再来一次" }),
+    ).toHaveAttribute("href", expect.stringContaining("again="));
+  });
+});
+
+describe("问上次的人", () => {
+  it("按了之后屏上说的是等他们答复，不是他们已经回来了", async () => {
+    // 不变量 3：成局前只有提案，没有关系。
+    // 「问」发出去的是一条待答复，每个人要自己点头——不是把人拉进来。
+    const calls = mockApi({ intents: [MATCHABLE_INTENT] });
+    render(<EchoScreen eventId={EVENT} />);
+
+    const card = await screen.findByRole("region", { name: "再来一次" });
+    const select = await within(card).findByRole("combobox", { name: "选一条需求" });
+    await userEvent.selectOptions(select, "再拍一支短片");
+    await userEvent.click(within(card).getByRole("button", { name: "问他们" }));
+
+    expect(await within(card).findByText(/问过了，等他们各自答复/)).toBeVisible();
+    // 界面上不出现「他们回来了」「已加入」这类意味着承诺已成立的话
+    expect(within(card).queryByText(/他们回来了|已加入|已经加入/)).toBeNull();
+
+    // 请求里带了正确的 intent_id 和 invite 列表
+    const askCall = calls.find((c) => c.url.includes(":again") && c.method === "POST");
+    expect(askCall?.body).toEqual({ intent_id: INTENT_ID, invite: [SU_ID] });
+  });
+
+  it("按过一次之后按钮不再出现，不能重复发给同一批人", async () => {
+    mockApi({ intents: [MATCHABLE_INTENT] });
+    render(<EchoScreen eventId={EVENT} />);
+
+    const card = await screen.findByRole("region", { name: "再来一次" });
+    const select = await within(card).findByRole("combobox", { name: "选一条需求" });
+    await userEvent.selectOptions(select, "再拍一支短片");
+    await userEvent.click(within(card).getByRole("button", { name: "问他们" }));
+
+    await within(card).findByText(/问过了/);
+    // 按钮消失，没有路径能再发一次
+    expect(within(card).queryByRole("button", { name: "问他们" })).toBeNull();
+  });
+
+  it("失败时说清没发出去，按钮还在，能再试", async () => {
+    mockApi({ intents: [MATCHABLE_INTENT], askAgainStatus: 500 });
+    render(<EchoScreen eventId={EVENT} />);
+
+    const card = await screen.findByRole("region", { name: "再来一次" });
+    const select = await within(card).findByRole("combobox", { name: "选一条需求" });
+    await userEvent.selectOptions(select, "再拍一支短片");
+    await userEvent.click(within(card).getByRole("button", { name: "问他们" }));
+
+    expect(await within(card).findByRole("alert")).toHaveTextContent("没发出去");
+    // 失败不是终点，按钮还在能重试
+    expect(within(card).getByRole("button", { name: "问他们" })).toBeEnabled();
+  });
+});

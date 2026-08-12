@@ -21,18 +21,28 @@
  * 界面文案不使用领域词汇（见 docs/07 语言映射表）。
  */
 
+import { DemoFastForward } from "@/components/demo-fast-forward";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { toContentIn, type Intent } from "@/lib/api";
 import {
+  dropIntent,
   myWaitingIntents,
   reviseAndReconfirm,
-  runClearing,
   waitingNow,
-  type ClearingReport,
   type Gap,
   type Waiting,
 } from "@/lib/matching";
+
+/**
+ * 主按钮 / 次按钮。**最终形态是手机**，所以尺寸从拇指开始算：
+ * 主按钮 48px 高、窄屏独占一行，次按钮 44px 且下划线是常态——
+ * 触屏上没有 hover，靠 hover 才现形的可点性等于不存在。
+ */
+const PRIMARY =
+  "inline-flex min-h-[48px] w-full items-center justify-center rounded-[16px] bg-accent px-5 text-[15px] font-semibold text-paper active:opacity-80 disabled:opacity-35 sm:w-auto";
+const QUIET =
+  "inline-flex min-h-[44px] items-center text-[15px] text-ink-soft underline underline-offset-4 active:text-ink hover:text-ink";
 
 export function WaitingScreen() {
   const [pulse, setPulse] = useState<Waiting | null>(null);
@@ -40,7 +50,6 @@ export function WaitingScreen() {
   const [mine, setMine] = useState<Intent[] | null>(null);
   // 拿不到"我在等什么"不该拖垮整屏：下次配队时间和缺口是公共信息，照常显示。
   const [mineDown, setMineDown] = useState(false);
-  const [ran, setRan] = useState<ClearingReport | null>(null);
 
   const loadMine = useCallback(async () => {
     try {
@@ -71,13 +80,14 @@ export function WaitingScreen() {
     void load();
   }, [load]);
 
-  async function again() {
+  async function drop(id: string) {
+    // 撤回之后立刻重取：一条已经不找了的需求还留在屏上，
+    // 用户会以为没生效，然后再点一次。
     try {
-      setRan(await runClearing());
-    } catch {
-      // 配一轮没跑起来不值得报错打断：下一次到点照样会配。
+      await dropIntent(id);
+    } finally {
+      void loadMine();
     }
-    void load();
   }
 
   if (pulseFailed) return <Shell><LoadFailed onRetry={() => void load()} /></Shell>;
@@ -88,11 +98,11 @@ export function WaitingScreen() {
 
   return (
     <Shell>
-      <header className="mb-8">
-        <h1 className="text-[20px] font-semibold tracking-tight">
+      <header className="mb-6 sm:mb-8">
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight sm:text-[30px]">
           {whenPhrase(pulse.next_round_at, now)}开始配队
         </h1>
-        <p className="mt-1 text-[13px] text-ink-soft">
+        <p className="mt-1.5 text-[14px] text-ink-soft">
           {countdown(pulse.next_round_at, now)}。
           {pulse.waiting_count > 1
             ? `这个方向上现在有 ${pulse.waiting_count} 个人在等。`
@@ -100,22 +110,27 @@ export function WaitingScreen() {
         </p>
       </header>
 
-      <section aria-label="现在缺什么" className="rounded-[16px] border border-line bg-card p-5">
-        <h2 className="text-[16px] font-medium">现在缺什么</h2>
+      <section
+        aria-label="现在缺什么"
+        className="rounded-[16px] border border-line bg-card p-4 sm:p-5"
+      >
+        <h2 className="text-[22px] font-semibold">现在缺什么</h2>
         <p className="mt-1 text-[13px] text-ink-faint">
-          这里只有人数，没有名字。
+          {/* 原来这里写的是「这里只有人数，没有名字」——那是在跟用户解释
+              一个设计决定。他要知道的不是我们决定了什么，是他能做什么。 */}
+          看得出缺哪种人，看不到是谁。你会其中一样，就写到「我这边」。
         </p>
 
         {pulse.gaps.length === 0 ? (
           // 空态：说清为什么空，并给一条能走的路。
           <div className="mt-4">
-            <p className="text-[15px]">还没有人写下自己缺什么，所以这里是空的。</p>
-            <p className="mt-1 text-[13px] text-ink-soft">
+            <p className="text-[16px]">还没有人写下自己缺什么，所以这里是空的。</p>
+            <p className="mt-1 text-[14px] text-ink-soft">
               你写清缺什么，下一轮就有人能对上。
             </p>
           </div>
         ) : (
-          <ul className="mt-4 space-y-2.5">
+          <ul className="mt-4 space-y-3">
             {pulse.gaps.map((gap) => (
               <GapRow key={gap.skill} gap={gap} />
             ))}
@@ -123,11 +138,11 @@ export function WaitingScreen() {
         )}
       </section>
 
-      <section aria-label="我在等的事" className="mt-6">
-        <h2 className="text-[16px] font-medium">你在等的事</h2>
+      <section aria-label="我在等的事" className="mt-8">
+        <h2 className="text-[22px] font-semibold">你在等的事</h2>
 
         {mineDown && (
-          <p className="mt-2 text-[14px] text-ink-soft">
+          <p className="mt-2 text-[15px] text-ink-soft">
             现在调不出你在等的那几件事。上面这些照常，等会儿再回来就能改了。
           </p>
         )}
@@ -136,79 +151,88 @@ export function WaitingScreen() {
 
         {/* 首次：还没有任何在等的事，给一条引导，不是一片空白。 */}
         {!mineDown && mine !== null && mine.length === 0 && (
-          <div className="mt-2 rounded-[16px] border border-line bg-card p-5">
-            <p className="text-[15px]">你还没有正在等配队的事。</p>
-            <p className="mt-1 text-[13px] text-ink-soft">
+          <div className="mt-3 rounded-[16px] border border-line bg-card p-4 sm:p-5">
+            <p className="text-[16px]">你还没有正在等配队的事。</p>
+            <p className="mt-1 text-[14px] text-ink-soft">
               说一句你想做什么，下一轮就带上你。
             </p>
-            <a
-              href="/"
-              className="mt-4 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
-            >
+            <a href="/" className={`${PRIMARY} mt-4`}>
               去说一件事
             </a>
           </div>
         )}
 
         {!mineDown && mine !== null && mine.length > 0 && (
-          <div className="mt-2 space-y-3">
+          <div className="mt-3 space-y-3">
             {mine.map((intent) => (
               <article
                 key={intent.id}
                 aria-label={intent.content.goal}
-                className="rounded-[16px] border border-line bg-card p-5"
+                className="rounded-[16px] border border-line bg-card p-4 sm:p-5"
               >
-                <p className="text-[15px]">{intent.content.goal}</p>
+                <p className="text-[18px] font-semibold">{intent.content.goal}</p>
                 <ReviseCard
                   intent={intent}
                   scarce={scarce}
                   canRevise={pulse.can_still_revise}
                   onDone={() => void loadMine()}
                 />
-                <a
-                  href={`/intents/${intent.id}/teams`}
-                  className="mt-4 inline-block text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
-                >
-                  看看给你找的人
-                </a>
+                {/* 手机上一行一件事：两条走向不同方向的路并排放，点错的
+                    那一次是撤回自己的需求。 */}
+                <div className="mt-4 flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-5">
+                  {/* 投递制之后这条路通向的是**说了愿意的人**，不是配好的队
+                      （ADR 0010）。他挑谁就是谁，不用再等一次回音。 */}
+                  <a href={`/intents/${intent.id}/candidates`} className={QUIET}>
+                    看看谁说了愿意
+                  </a>
+                  {/* 不问为什么，也不二次确认——和「我不参加」同一条：
+                      退出是一步完成的。 */}
+                  <button
+                    type="button"
+                    onClick={() => void drop(intent.id)}
+                    className={`${QUIET} hover:text-clash`}
+                  >
+                    这事不找了
+                  </button>
+                </div>
               </article>
             ))}
           </div>
         )}
       </section>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={() => void again()}
-          className="text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
-        >
-          现在就配一次
-        </button>
-        <span className="text-[13px] text-ink-faint">
-          {ran
-            ? `这一轮看了 ${ran.considered} 件事，配成 ${ran.proposed} 个小队。`
-            : "到点会自动配，不用一直守着。"}
-        </span>
-      </div>
+      <p className="mt-8 text-[13px] text-ink-faint">到点会自动配，不用一直守着。</p>
+
+      {/* 调试条。**演示模式下才存在**——生产里后端那条推时钟的路由
+          根本不注册，这个组件问一次 health 就自己消失。
+
+          原来这一屏有两个「现在就配」：一个在标题底下的虚线框里，
+          一个在这儿，而后者**没有任何开关挡着**——它会跟着产品一起
+          发到线上。同一件事有两个入口本身就是没想清楚的痕迹。 */}
+      <DemoFastForward onDone={() => window.location.reload()} />
     </Shell>
   );
 }
 
 function Shell({ children }: { children: ReactNode }) {
-  return <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-16">{children}</main>;
+  // 底部留出 pb-24：手机上固定底栏会压住最后一行。
+  return (
+    <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-6 sm:px-5 sm:pb-16 sm:pt-16">
+      {children}
+    </main>
+  );
 }
 
 /** 一样本事：多少人要、多少人会。缺口大的排前面，那是最该知道的一行。 */
 function GapRow({ gap }: { gap: Gap }) {
   return (
     <li className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <span className="text-[15px]">{gap.skill}</span>
-      <span className="text-[13px] text-ink-soft">
+      <span className="text-[16px]">{gap.skill}</span>
+      <span className="text-[14px] text-ink-soft">
         {gap.wanted} 个人要，{gap.offered} 个人会
       </span>
       {gap.scarce && (
-        <span className="rounded-[4px] bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent">
+        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[12px] text-accent">
           还缺 {gap.wanted - gap.offered} 个
         </span>
       )}
@@ -269,16 +293,18 @@ export function ReviseCard({
 
   if (!canRevise) {
     return (
-      <p className="mt-3 text-[13px] text-ink-soft">
+      <p className="mt-3 text-[14px] text-ink-soft">
         这一轮已经开始配了，改动从下一轮起算。
       </p>
     );
   }
 
   return (
-    <div className="mt-3">
+    <div className="mt-4">
       <label className="block">
-        <span className="text-[13px] text-ink-soft">我缺</span>
+        <span className="text-[14px] text-ink-soft">我缺</span>
+        {/* 16px 起。iOS Safari 会把更小的输入框连同整页一起放大，
+            那一下会让人以为页面坏了。 */}
         <input
           value={text}
           onChange={(e) => {
@@ -287,16 +313,16 @@ export function ReviseCard({
           }}
           placeholder="用、隔开"
           aria-label="我缺"
-          className="mt-1 w-full rounded-[8px] border border-line px-3 py-2 text-[15px] outline-none placeholder:text-ink-faint focus:border-accent"
+          className="mt-1 min-h-[48px] w-full rounded-[10px] border border-line px-3 text-[16px] outline-none placeholder:text-ink-faint focus:border-accent"
         />
       </label>
 
-      <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <button
           type="button"
           disabled={busy || !changed}
           onClick={() => void save(typed, intent.content.offers)}
-          className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+          className={PRIMARY}
         >
           {busy ? "改着…" : "改好了"}
         </button>
@@ -320,7 +346,7 @@ export function ReviseCard({
                   [...intent.content.offers, skill],
                 )
               }
-              className="rounded-[12px] border border-line px-3 py-1.5 text-[13px] text-ink-soft hover:border-accent hover:text-ink"
+              className="inline-flex min-h-[44px] items-center rounded-full border border-line bg-card px-4 text-[14px] text-ink active:border-accent hover:border-accent"
             >
               「{skill}」这一样我自己来
             </button>
@@ -329,7 +355,7 @@ export function ReviseCard({
       )}
 
       {failed && (
-        <p role="alert" className="mt-2 text-[13px] text-clash">
+        <p role="alert" className="mt-2 text-[14px] text-clash">
           这一下没改上，你写的还在，再点一次试试。
         </p>
       )}
@@ -357,16 +383,12 @@ function Loading() {
 /** 错误态：说清哪里断了、下一步做什么，不出现错误码。 */
 function LoadFailed({ onRetry }: { onRetry: () => void }) {
   return (
-    <section role="alert" className="rounded-[16px] border border-line bg-card p-5">
-      <p className="text-[15px]">现在查不到下次什么时候配队。</p>
-      <p className="mt-1 text-[13px] text-ink-soft">
+    <section role="alert" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+      <p className="text-[16px]">现在查不到下次什么时候配队。</p>
+      <p className="mt-1 text-[14px] text-ink-soft">
         你说过的那几件事都还在，到点照样带上你。
       </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
-      >
+      <button type="button" onClick={onRetry} className={`${PRIMARY} mt-4`}>
         再看一次
       </button>
     </section>

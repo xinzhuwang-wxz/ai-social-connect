@@ -194,6 +194,16 @@ const SPACE = {
   // 助手写的两条也是「要做的事」，但它们不在这里面：既不进分子也不进分母。
   progress: { done: 1, total: 3 },
   summary: "3 件事做完 1 件，2 件事等着定，1 件卡住了，2 条等你过目",
+  // PRD 要求房间顶部持续展示成员。少了它，「还差谁确认」只能说"还差 2 个人"，
+  // 而那催不动任何人。
+  members: [
+    { principal_id: ME, display_name: "林知遥" },
+    { principal_id: CHEN, display_name: "陈牧" },
+  ],
+  // 阶段由真实事实派生，不由聊天量派生（不变量 6）。
+  growth: "seedling",
+  growth_word: "长出幼苗",
+  growth_why: "有人开始认领要做的事了",
 };
 
 /** 关掉助手之后的同一屏：人工那几栏一条都没少，只有草稿那一栏空了。 */
@@ -211,9 +221,9 @@ const FIRST = item({
 });
 
 const FRESH: typeof SPACE = {
-  id: SPACE_ID,
-  title: "流浪猫短片",
-  agent_enabled: true,
+  // 从 SPACE 展开而不是重列一遍：漏一个字段，屏上就会崩在一个和这条
+  // 用例无关的地方，而报出来的是"找不到某句文案"。
+  ...SPACE,
   cards: [FIRST],
   open_gates: [],
   stuck: [],
@@ -234,6 +244,47 @@ const TIPS = [
   { kind: "task", title: "问一下能不能借到灯", grounded_in: ["周四晚上拍夜景"] },
 ];
 
+/** 还没人写过这张卡。**这是一个状态，不是错误。** */
+const NO_PLAN = {
+  exists: false,
+  nodded: [],
+  waiting_on: [],
+  confirmed: false,
+  i_nodded: false,
+  missing: ["什么时候", "在哪集合"],
+};
+
+const PLAN = {
+  ...NO_PLAN,
+  exists: true,
+  title: "周六去后山拍流浪猫",
+  starts_at: "2026-08-15T09:00:00Z",
+  place: "北门地铁口",
+  bring: "相机、充电宝",
+  waiting_on: [ME, CHEN],
+  missing: [],
+};
+
+/** 还没到那天。**这一块此时根本不该占地方。** */
+const NOT_YET = {
+  active: false,
+  standings: [],
+  done_by: [],
+  done_waiting_on: [],
+  all_done: false,
+  i_marked_done: false,
+};
+
+/** 就是今天。 */
+const TODAY = {
+  ...NOT_YET,
+  active: true,
+  starts_at: "2026-08-15T09:00:00Z",
+  where: "北门地铁口",
+  bring: "相机",
+  done_waiting_on: [ME, CHEN],
+};
+
 type Call = { url: string; method: string; body: unknown };
 
 type Options = {
@@ -243,6 +294,9 @@ type Options = {
   spaceStatus?: number;
   kindsStatus?: number;
   tipsStatus?: number;
+  plan?: Record<string, unknown>;
+  dayOf?: Record<string, unknown>;
+  polls?: Record<string, unknown>[];
   writeStatus?: number;
   hang?: boolean;
 };
@@ -255,6 +309,8 @@ function mockApi(opts: Options = {}): Call[] {
     json: async () => body,
   });
   let on = (opts.space ?? SPACE).agent_enabled;
+  let plan: Record<string, unknown> = opts.plan ?? NO_PLAN;
+  let dayOf: Record<string, unknown> = opts.dayOf ?? NOT_YET;
 
   vi.stubGlobal(
     "fetch",
@@ -264,6 +320,56 @@ function mockApi(opts: Options = {}): Call[] {
       const body = init?.body ? JSON.parse(String(init.body)) : null;
       calls.push({ url, method, body });
 
+      // 房间里挂着聊天。桩不覆盖它的话，它会掉进兜底分支，
+      // 而兜底返回的东西会被当成一屏聊天渲染出来。
+      if (url.endsWith("/chat")) {
+        return reply({ messages: [], threads: [] });
+      }
+      if (url.endsWith("/polls")) {
+        return reply(opts.polls ?? []);
+      }
+      if (url.endsWith(":vote")) {
+        return reply((opts.polls ?? [])[0] ?? null);
+      }
+      if (url.endsWith("/day-of") && method !== "GET") {
+        dayOf = { ...dayOf, my_state: (body as { state: string }).state };
+        return reply(dayOf);
+      }
+      if (url.endsWith("/day-of")) {
+        return reply(dayOf);
+      }
+      if (url.endsWith("/done")) {
+        const mine = method !== "DELETE";
+        dayOf = {
+          ...dayOf,
+          i_marked_done: mine,
+          done_by: mine ? [ME] : [],
+          done_waiting_on: mine ? [CHEN] : [ME, CHEN],
+          all_done: false,
+        };
+        return reply(dayOf);
+      }
+      if (url.endsWith("/plan:confirm")) {
+        plan = { ...plan, i_nodded: true, nodded: [ME], waiting_on: [CHEN] };
+        return reply(plan);
+      }
+      if (url.endsWith("/plan") && method === "PUT") {
+        // 后端按内容摘要记点头：改了内容，所有人的确认一起失效。
+        plan = {
+          ...plan,
+          ...(body as Record<string, unknown>),
+          exists: true,
+          nodded: [],
+          waiting_on: [ME, CHEN],
+          i_nodded: false,
+          confirmed: false,
+          missing: [],
+        };
+        return reply(plan);
+      }
+      if (url.endsWith("/plan")) {
+        return reply(plan);
+      }
       if (url === "/api/item-kinds") {
         return opts.kindsStatus
           ? reply({ detail: "没连上" }, opts.kindsStatus)
@@ -418,7 +524,7 @@ describe("助手在角落", () => {
     await opened();
 
     // 助手起草的两条也是「要做的事」，算进去就该是 5 件。
-    expect(screen.getByLabelText("一共 3 件，做完 1 件")).toBeVisible();
+    expect(within(screen.getByRole("region", { name: "这件事现在到哪了" })).getByText("3 件")).toBeVisible();
     expect(screen.queryByLabelText(/一共 5 件/)).toBeNull();
 
     const guess = card("把片头字幕做出来");
@@ -505,7 +611,7 @@ describe("关掉助手之后整屏照常", () => {
     for (const name of ["我来做", "我点头", "放回去", "放一条东西", "放到外面去"]) {
       expect(screen.getByRole("button", { name })).toBeEnabled();
     }
-    expect(screen.getByLabelText("一共 3 件，做完 1 件")).toBeVisible();
+    expect(within(screen.getByRole("region", { name: "这件事现在到哪了" })).getByText("3 件")).toBeVisible();
     // 关掉助手不是一次故障，界面上不该出现任何报错。
     expect(screen.queryByRole("alert")).toBeNull();
   });
@@ -732,3 +838,213 @@ function expectNoDomainWords(text: string) {
     expect(text).not.toContain(term);
   }
 }
+
+describe("这件事现在到哪了", () => {
+  it("顶上一眼看得见：长到哪一步、有谁、还剩什么", async () => {
+    // PRD 要求房间顶部**持续展示**目标、成员、已确认、未确认、进度、下一步。
+    // 散在下面几栏里等于没有——一个刚点进来的人要在一眼之内知道
+    // "这件事现在到哪了、下一步是什么"。
+    mockApi();
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const board = await screen.findByRole("region", { name: "这件事现在到哪了" });
+    expect(within(board).getByText("长出幼苗")).toBeVisible();
+    expect(within(board).getByText(/有人开始认领/)).toBeVisible();
+    expect(within(board).getByText(/林知遥、陈牧/)).toBeVisible();
+  });
+
+  it("阶段说得出凭什么，不是一个百分比", async () => {
+    // 说不出判据的进度条会被当成系统在评价你。
+    // 而且这一屏**不出现百分比**——定了时间没定地点，和定了地点没定时间，
+    // 谁更"完成"？
+    mockApi();
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const board = await screen.findByRole("region", { name: "这件事现在到哪了" });
+    expect(board.textContent).not.toMatch(/%|％/);
+  });
+});
+
+describe("这次怎么办", () => {
+  it("还没人写过时，说清它是干什么的，并给一个入口", async () => {
+    mockApi();
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "这次怎么办" });
+    expect(within(card).getByRole("button", { name: "写一张" })).toBeVisible();
+  });
+
+  it("要素没齐就确认不了，而且说得出缺哪一样", async () => {
+    // 一张没写什么时候、在哪的卡不是计划，是一个愿望。
+    // 让人对着愿望点头，等于让"确认"这个动作贬值。
+    mockApi({ plan: { ...PLAN, missing: ["在哪集合"] } });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "这次怎么办" });
+    expect(within(card).getByText(/还差在哪集合没写/)).toBeVisible();
+    expect(within(card).getByRole("button", { name: "就这么办" })).toBeDisabled();
+  });
+
+  it("还差谁确认，指名道姓", async () => {
+    // 「还差 2 个人」催不动任何人。
+    mockApi({ plan: PLAN });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "这次怎么办" });
+    // **"还差谁"里不该有我自己**——我该看到的是一个可以点的按钮，
+    // 不是一句催我自己的话。
+    expect(within(card).getByText(/还差陈牧确认/)).toBeVisible();
+    expect(within(card).queryByText(/林知遥/)).toBeNull();
+  });
+
+  it("改之前就说清楚：改了要请大家重新确认", async () => {
+    // 事后才说，他会以为自己只是改了个错别字。
+    mockApi({ plan: { ...PLAN, nodded: [CHEN], waiting_on: [ME] } });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "这次怎么办" });
+    await userEvent.click(within(card).getByRole("button", { name: "改一改" }));
+
+    expect(
+      await screen.findByText(/已经有 1 个人确认过了。改完要请他们再确认一次/),
+    ).toBeVisible();
+  });
+});
+
+describe("到那天了", () => {
+  it("还没到那天，这一块不占地方", async () => {
+    // 一个常驻的"我出发了"按钮在事情还没定下来的时候只是噪音，
+    // 而噪音会让人学会忽略这一整块。
+    mockApi();
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    await screen.findByRole("region", { name: "这件事现在到哪了" });
+    expect(screen.queryByRole("region", { name: "到那天了" })).toBeNull();
+  });
+
+  it("到了那天，说清在哪集合、带什么，并给几个轻量状态", async () => {
+    // PRD：首版不需要持续定位，只要地址入口和必要状态。
+    mockApi({ dayOf: TODAY });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "到那天了" });
+    expect(within(card).getByText(/在北门地铁口集合/)).toBeVisible();
+    for (const label of ["准备好了", "出发了", "到了"]) {
+      expect(within(card).getByRole("button", { name: label })).toBeVisible();
+    }
+  });
+
+  it("「临时有变」要能说一句怎么了", async () => {
+    // 一个不说原因的「临时有变」只会让所有人干着急。
+    mockApi({ dayOf: TODAY });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "到那天了" });
+    await userEvent.click(within(card).getByRole("button", { name: "临时有变" }));
+
+    expect(within(card).getByLabelText("怎么了？")).toBeVisible();
+    expect(within(card).getByRole("button", { name: "告诉大家" })).toBeDisabled();
+  });
+
+  it("我说做完了之后，说清还差谁——并且点错了能收回", async () => {
+    // 一个人说做完了就标记完成，等于让他替所有人宣布。
+    // 不给收回的路，人就不敢点，而不敢点会让这一步整个失效。
+    mockApi({ dayOf: TODAY });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const card = await screen.findByRole("region", { name: "到那天了" });
+    await userEvent.click(within(card).getByRole("button", { name: "我这边做完了" }));
+
+    expect(await within(card).findByText(/还差陈牧/)).toBeVisible();
+    expect(within(card).getByRole("button", { name: "点错了" })).toBeVisible();
+  });
+});
+
+describe("要选一个", () => {
+  it("票数看得见，而且指名道姓", async () => {
+    // 藏着计票会让人觉得系统在操纵；而这是一个五六个人的组，
+    // 藏起来他们也猜得到，猜出来的版本往往更伤人。
+    mockApi({
+      polls: [
+        {
+          item_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          question: "周六去东湖还是磨山？",
+          tally: [
+            { label: "东湖", votes: 2, by: ["林知遥", "陈牧"] },
+            { label: "磨山", votes: 0, by: [] },
+          ],
+          my_choice: 0,
+          waiting_on: [],
+          leading: "东湖",
+          settled: false,
+        },
+      ],
+    });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const poll = await screen.findByRole("region", { name: "周六去东湖还是磨山？" });
+    expect(within(poll).getByText("2 票")).toBeVisible();
+    expect(within(poll).getByText("林知遥、陈牧")).toBeVisible();
+  });
+
+  it("票最多也不算定下来", async () => {
+    // 一次投票是表达，不是承诺（不变量 11）。
+    mockApi({
+      polls: [
+        {
+          item_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          question: "去哪？",
+          tally: [{ label: "东湖", votes: 2, by: [] }, { label: "磨山", votes: 1, by: [] }],
+          my_choice: 0,
+          waiting_on: [],
+          leading: "东湖",
+          settled: false,
+        },
+      ],
+    });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const poll = await screen.findByRole("region", { name: "去哪？" });
+    expect(within(poll).getByText(/还要有人点头才算定下来/)).toBeVisible();
+  });
+
+  it("平票就说平票，不替人破局", async () => {
+    mockApi({
+      polls: [
+        {
+          item_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          question: "去哪？",
+          tally: [{ label: "东湖", votes: 1, by: [] }, { label: "磨山", votes: 1, by: [] }],
+          my_choice: 0,
+          waiting_on: [],
+          leading: null,
+          settled: false,
+        },
+      ],
+    });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    const poll = await screen.findByRole("region", { name: "去哪？" });
+    expect(within(poll).getByText(/票数打平——你们自己定一个吧/)).toBeVisible();
+  });
+
+  it("定了的那一条不再占地方", async () => {
+    mockApi({
+      polls: [
+        {
+          item_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          question: "去哪？",
+          tally: [],
+          my_choice: null,
+          waiting_on: [],
+          leading: null,
+          settled: true,
+        },
+      ],
+    });
+    render(<SpaceScreen spaceId={SPACE_ID} />);
+
+    await screen.findByRole("region", { name: "这件事现在到哪了" });
+    expect(screen.queryByRole("region", { name: "去哪？" })).toBeNull();
+  });
+});

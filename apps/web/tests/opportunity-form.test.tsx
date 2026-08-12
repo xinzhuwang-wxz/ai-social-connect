@@ -343,7 +343,7 @@ describe("发出去之前先看一眼", () => {
     expect(preview.getByText("剪辑")).toBeVisible();
     expect(preview.getByText("还缺 2 个")).toBeVisible();
     expect(preview.getByText("这件事由 陈牧 负责，有问题找他。")).toBeVisible();
-    expect(preview.getByText("校园核过这个组织")).toBeVisible();
+    expect(preview.getByLabelText("校园核过这个组织")).toBeVisible();
   });
 
   it("预览里能看出还没写负责人会长什么样", async () => {

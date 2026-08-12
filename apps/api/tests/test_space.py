@@ -46,7 +46,7 @@ from cofield.space import (
     MissingProvenance,
     NotYoursToDecide,
     Progress,
-    Reach,
+    ItemReach,
     field_agent,
     item_kinds,
     person,
@@ -397,11 +397,11 @@ def test_something_without_a_source_or_a_reach_never_gets_in(engine: Engine) -> 
             "试拍的第一条",
             by=person(CHEN_MU),
             now=NOW,
-            extras={SOURCE: "陈牧手机直传", REACH: Reach.OURS},
+            extras={SOURCE: "陈牧手机直传", REACH: ItemReach.OURS},
         )
         assert kept.created_by == CHEN_MU, "上传者必须留得住"
         assert kept.extras[SOURCE] == "陈牧手机直传"
-        assert kept.extras[REACH] == Reach.OURS.value
+        assert kept.extras[REACH] == ItemReach.OURS.value
 
 
 def test_sending_something_outside_needs_everyone_to_have_nodded(
@@ -420,13 +420,13 @@ def test_sending_something_outside_needs_everyone_to_have_nodded(
             "试拍的第一条",
             by=person(CHEN_MU),
             now=NOW,
-            extras={SOURCE: "陈牧手机直传", REACH: Reach.OURS},
+            extras={SOURCE: "陈牧手机直传", REACH: ItemReach.OURS},
         )
 
         with pytest.raises(NotYoursToDecide):
-            c.change_reach(thing.id, to=Reach.OUTSIDE, by=person(ME), now=NOW)
+            c.change_reach(thing.id, to=ItemReach.OUTSIDE, by=person(ME), now=NOW)
         with pytest.raises(AgentCannotDecide):
-            c.change_reach(thing.id, to=Reach.OUTSIDE, by=agent, now=NOW)
+            c.change_reach(thing.id, to=ItemReach.OUTSIDE, by=agent, now=NOW)
 
         gate = c.add(
             "decision_gate",
@@ -438,15 +438,15 @@ def test_sending_something_outside_needs_everyone_to_have_nodded(
         c.confirm(gate.id, by=person(ME), now=NOW)
         # 还差一个人点头的时候，仍然发不出去。
         with pytest.raises(NotYoursToDecide):
-            c.change_reach(thing.id, to=Reach.OUTSIDE, by=person(ME), now=NOW)
+            c.change_reach(thing.id, to=ItemReach.OUTSIDE, by=person(ME), now=NOW)
 
         c.confirm(gate.id, by=person(CHEN_MU), now=NOW)
-        sent = c.change_reach(thing.id, to=Reach.OUTSIDE, by=person(ME), now=NOW)
-        assert sent.extras[REACH] == Reach.OUTSIDE.value
+        sent = c.change_reach(thing.id, to=ItemReach.OUTSIDE, by=person(ME), now=NOW)
+        assert sent.extras[REACH] == ItemReach.OUTSIDE.value
 
         # 收回不用再点一次头。
-        back = c.change_reach(thing.id, to=Reach.OURS, by=person(CHEN_MU), now=NOW)
-        assert back.extras[REACH] == Reach.OURS.value
+        back = c.change_reach(thing.id, to=ItemReach.OURS, by=person(CHEN_MU), now=NOW)
+        assert back.extras[REACH] == ItemReach.OURS.value
 
 
 # --- 一屏看见什么 -----------------------------------------------------------
@@ -664,7 +664,7 @@ def test_nothing_a_person_reads_is_written_in_the_engineering_vocabulary(
             "试拍的第一条",
             by=person(CHEN_MU),
             now=NOW,
-            extras={SOURCE: "陈牧手机直传", REACH: Reach.OURS},
+            extras={SOURCE: "陈牧手机直传", REACH: ItemReach.OURS},
         )
         c.add(
             "decision_gate",

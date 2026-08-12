@@ -70,7 +70,55 @@ BRAND_LITERALS = frozenset(
 #: 改成扫**所有中文串**。这在 .tsx 里是个可靠的启发：变量名、类型名、
 #: 属性名都不会是中文，所以文件里出现的中文几乎全是要给人看的字。
 _CHINESE_RUN = re.compile(r"[一-鿿][^\n]*?(?=[<>{}\"\'`;]|$)")
-_LINE_COMMENT = re.compile(r"^\s*(//|/\*|\*)")
+
+
+def without_comments(source: str) -> str:
+    """把注释抹成空格，**保留每一个换行**，这样行号还对得上。
+
+    ## 为什么不能只看行首
+
+    原来这里是一个 `^\s*(//|/\*|\*)` 的行首正则。它认得出注释块的第一行，
+    认不出续行——一段跨三行的 `{/* … */}`，中间那两行会被当成代码扫。
+    于是"注释里解释这个词为什么不能出现在界面上"本身被报成泄漏，
+    而真正的做法只剩把注释删掉，那等于用沉默换绿灯。
+
+    引号要一起认：`"https://x"` 里的 `//` 不是注释的开头。
+    """
+    out: list[str] = []
+    i, n = 0, len(source)
+    quote = ""
+    while i < n:
+        ch = source[i]
+        if quote:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(source[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "\"'`":
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        if source.startswith("//", i):
+            while i < n and source[i] != "\n":
+                out.append(" ")
+                i += 1
+            continue
+        if source.startswith("/*", i):
+            while i < n and not source.startswith("*/", i):
+                out.append("\n" if source[i] == "\n" else " ")
+                i += 1
+            out.append("  ")
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 def domain_terms() -> set[str]:
@@ -93,9 +141,9 @@ def scan() -> list[tuple[Path, int, str, list[str]]]:
             source = path.read_text(encoding="utf-8")
             if any(marker in source for marker in EXEMPT_MARKERS):
                 continue
-            for number, line in enumerate(source.splitlines(), start=1):
-                if _LINE_COMMENT.match(line):
-                    continue
+            for number, line in enumerate(
+                without_comments(source).splitlines(), start=1
+            ):
                 for fragment in _CHINESE_RUN.findall(line):
                     text = fragment.strip()
                     if not text or text in BRAND_LITERALS:

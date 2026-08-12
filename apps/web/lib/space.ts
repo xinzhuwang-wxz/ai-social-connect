@@ -17,8 +17,12 @@ export type Item = components["schemas"]["ItemOut"];
 export type ItemKind = components["schemas"]["ItemKindOut"];
 export type Progress = components["schemas"]["ProgressOut"];
 export type Suggestion = components["schemas"]["SuggestionOut"];
-export type Reach = components["schemas"]["Reach"];
+export type Reach = components["schemas"]["ItemReach"];
 export type NewItem = components["schemas"]["AddItemRequest"];
+export type Plan = components["schemas"]["PlanOut"];
+export type PlanIn = components["schemas"]["PlanIn"];
+export type DayOf = components["schemas"]["DayOfOut"];
+export type Poll = components["schemas"]["PollOut"];
 export type ItemPatch = components["schemas"]["ReviseItemRequest"];
 export type TakeSuggestion = components["schemas"]["AcceptSuggestionRequest"];
 
@@ -56,6 +60,51 @@ export const fetchSpace = (spaceId: string) =>
  * 注册表驱动：后端多声明一类，这里自动多一个选项，前端不改代码。
  */
 export const itemKinds = () => request<ItemKind[]>("/api/item-kinds");
+
+/** 这个空间里正在投的票。 */
+export const fetchPolls = (spaceId: string) =>
+  request<Poll[]>(`/api/spaces/${spaceId}/polls`);
+
+/** 投一票。改主意就再投一次——**一个人只能改自己那一票**。 */
+export const castVote = (spaceId: string, itemId: string, choice: number) =>
+  request<Poll>(`/api/spaces/${spaceId}/items/${itemId}:vote`, {
+    method: "POST",
+    body: JSON.stringify({ choice }),
+  });
+
+/** 这次到底要做什么。还没建过卡时返回一个空态，不是 404。 */
+export const fetchPlan = (spaceId: string) =>
+  request<Plan>(`/api/spaces/${spaceId}/plan`);
+
+/** 写这张卡。**改任何一项，所有人的点头一起失效。** */
+export const savePlan = (spaceId: string, body: PlanIn) =>
+  request<Plan>(`/api/spaces/${spaceId}/plan`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+
+/** 到那天了这一屏。计划还没定时间时它是不激活的，不是错误。 */
+export const fetchDayOf = (spaceId: string) =>
+  request<DayOf>(`/api/spaces/${spaceId}/day-of`);
+
+/** 改我自己此刻的处境。每人一条，覆盖——它是处境不是历史。 */
+export const setDayOf = (spaceId: string, state: string, note?: string) =>
+  request<DayOf>(`/api/spaces/${spaceId}/day-of`, {
+    method: "PUT",
+    body: JSON.stringify({ state, note: note ?? null }),
+  });
+
+/** 我这边做完了。**全员点头才算完成。** */
+export const markDone = (spaceId: string) =>
+  request<DayOf>(`/api/spaces/${spaceId}/done`, { method: "POST" });
+
+/** 点错了收回。不给收回的路，人就不敢点。 */
+export const unmarkDone = (spaceId: string) =>
+  request<DayOf>(`/api/spaces/${spaceId}/done`, { method: "DELETE" });
+
+/** 我确认这次就这么办。 */
+export const confirmPlan = (spaceId: string) =>
+  request<Plan>(`/api/spaces/${spaceId}/plan:confirm`, { method: "POST" });
 
 /** 放一条东西。放的人取自请求头，不取自请求体。 */
 export const addItem = (spaceId: string, body: NewItem) =>

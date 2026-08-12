@@ -576,3 +576,122 @@ def test_no_domain_vocabulary_reaches_the_screen(
         for text in strings(body):
             for word in DOMAIN_WORDS:
                 assert word not in text, f"用户读得到的这句话里有领域词「{word}」：{text}"
+
+
+# --- 投票：把「还没定的事」变成一次能收敛的选择 ---
+
+
+def _a_poll(
+    client: TestClient, space_id: UUID, deciders: list[str], **rest: Any
+) -> dict:
+    res = client.post(
+        f"/api/spaces/{space_id}/items",
+        json={
+            "kind": "poll",
+            "title": "周六去东湖还是磨山？",
+            "extras": {"options": ["东湖", "磨山"], "deciders": deciders},
+            **rest,
+        },
+    )
+    assert res.status_code == 201, res.text
+    return dict(res.json())
+
+
+def test_a_poll_shows_the_count_to_everyone(
+    client: TestClient, space_id: UUID, me: Any, chen_mu: Any
+) -> None:
+    """票数实时可见。
+
+    藏着计票会让人觉得系统在操纵，而这是一个五六个人的组——
+    他们本来就看得见彼此。
+    """
+    item = _a_poll(client, space_id, [str(me.id), str(chen_mu.id)])
+
+    body = client.post(
+        f"/api/spaces/{space_id}/items/{item['id']}:vote", json={"choice": 0}
+    ).json()
+
+    assert body["tally"][0]["votes"] == 1
+    assert body["my_choice"] == 0
+    assert body["waiting_on"], "说不出还差谁投"
+
+
+def test_changing_my_mind_replaces_my_vote_not_adds_one(
+    client: TestClient, space_id: UUID, me: Any
+) -> None:
+    """一个人只能改自己那一票。"""
+    item = _a_poll(client, space_id, [str(me.id)])
+    client.post(f"/api/spaces/{space_id}/items/{item['id']}:vote", json={"choice": 0})
+
+    body = client.post(
+        f"/api/spaces/{space_id}/items/{item['id']}:vote", json={"choice": 1}
+    ).json()
+
+    assert [t["votes"] for t in body["tally"]] == [0, 1]
+
+
+def test_a_tie_is_reported_as_a_tie(
+    client: TestClient, space_id: UUID, me: Any, chen_mu: Any
+) -> None:
+    """平票就是平票。**替人破局等于替人做决定**，而这一步的全部意义
+    正是把决定交回给人。"""
+    item = _a_poll(client, space_id, [str(me.id), str(chen_mu.id)])
+    client.post(f"/api/spaces/{space_id}/items/{item['id']}:vote", json={"choice": 0})
+    body = client.post(
+        f"/api/spaces/{space_id}/items/{item['id']}:vote",
+        json={"choice": 1},
+        headers={"X-Principal-Id": str(chen_mu.id), "X-Campus-Id": CAMPUS},
+    ).json()
+
+    assert body["leading"] is None
+
+
+def test_the_most_votes_does_not_close_it(
+    client: TestClient, space_id: UUID, me: Any
+) -> None:
+    """票最多的那个不会自己变成"定了"。
+
+    一次投票是**表达**，不是承诺（不变量 11）。把它直接当成承诺，
+    "谁同意了什么"就没有可查的答案了。
+    """
+    item = _a_poll(client, space_id, [str(me.id)])
+
+    body = client.post(
+        f"/api/spaces/{space_id}/items/{item['id']}:vote", json={"choice": 0}
+    ).json()
+
+    assert body["leading"] == "东湖"
+    assert body["settled"] is False, "票一多就自己关上了"
+    # 关上它仍然要有人点头，走的是和别的要定的事同一条路。
+    assert (
+        client.post(f"/api/spaces/{space_id}/items/{item['id']}:confirm").status_code
+        == 200
+    )
+    assert client.get(f"/api/spaces/{space_id}/polls").json()[0]["settled"] is True
+
+
+def test_there_is_no_such_option(client: TestClient, space_id: UUID, me: Any) -> None:
+    """投一个不存在的选项要被拦住，不是静默记下一个越界的数字。"""
+    item = _a_poll(client, space_id, [str(me.id)])
+
+    res = client.post(
+        f"/api/spaces/{space_id}/items/{item['id']}:vote", json={"choice": 7}
+    )
+
+    assert res.status_code == 422
+
+
+def test_a_poll_without_options_cannot_be_created(
+    client: TestClient, space_id: UUID, me: Any
+) -> None:
+    """没有选项的投票不是投票。"""
+    res = client.post(
+        f"/api/spaces/{space_id}/items",
+        json={
+            "kind": "poll",
+            "title": "去哪？",
+            "extras": {"deciders": [str(me.id)]},
+        },
+    )
+
+    assert res.status_code == 422

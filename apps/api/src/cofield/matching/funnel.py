@@ -38,8 +38,8 @@ import sqlalchemy as sa
 from sqlalchemy import Connection
 from sqlalchemy.sql import Select
 
-from cofield.adapters.persistence.schema import principals
-from cofield.domain.model.intent import IntentSignal
+from cofield.adapters.persistence.schema import event_members, principals
+from cofield.domain.model.intent import IntentSignal, Reach
 from cofield.domain.ports.embedder import EmbeddingUnavailable
 from cofield.matching.semantic import SemanticRetriever
 
@@ -201,9 +201,45 @@ class Funnel:
         stmt = self._id_query(intent, exclude)
         content = intent.content
 
-        # 必要角色：候选至少覆盖一个缺口，否则他来了也补不上洞。
+        # 必要角色：会这一项的人，**或者说过想参与这类事的人**。
+        #
+        # 只认 `skills` 是不够的。一个刚做完一件事、想再接一个的人要的
+        # 不是发起，是参与——他补不上任何一个具体的洞，但他正是这个产品
+        # 该找到的人。只认 `skills` 的时候他永远不会出现在任何人的候选里。
+        #
+        # 放宽的只有召回。求解器的 ROLE_COVERAGE 仍然只认 `skills`，
+        # 所以他能被叫来一起做，但不会被当成会剪辑的人塞进剪辑那个坑里。
+        # **放宽召回，不放宽承诺。**
         if content.needs and skip != "needs":
-            stmt = stmt.where(principals.c.skills.overlap(list(content.needs)))
+            wanted = list(content.needs)
+            stmt = stmt.where(
+                sa.or_(
+                    principals.c.skills.overlap(wanted),
+                    principals.c.open_to.overlap(wanted),
+                )
+            )
+
+        # 只问一起做成过事的人。
+        #
+        # 「熟人」由**共同完成过的事**定义，不是好友列表，也不是平台觉得
+        # 你们熟——不变量 7：关系图谱是共同事件的可重建投影，不是主观判定。
+        #
+        # 第一次用的人在这一档下会得到零个候选。那不是 bug，是这一档的
+        # 真实含义；界面要在他选之前就说清楚。
+        if intent.reach is Reach.KNOWN and skip != "reach":
+            mine = (
+                sa.select(event_members.c.event_id)
+                .where(event_members.c.principal_id == intent.principal_id)
+                .where(event_members.c.left_at.is_(None))
+                .scalar_subquery()
+            )
+            stmt = stmt.where(
+                principals.c.id.in_(
+                    sa.select(event_members.c.principal_id)
+                    .where(event_members.c.event_id.in_(mine))
+                    .where(event_members.c.left_at.is_(None))
+                )
+            )
 
         # 校区：跨校区的活动多数人不会去。
         if content.location_scope and skip != "location_scope":
@@ -227,6 +263,7 @@ class Funnel:
         for field_name, present in (
             ("needs", bool(content.needs)),
             ("location_scope", bool(content.location_scope)),
+            ("reach", intent.reach is Reach.KNOWN),
         ):
             if not present:
                 continue

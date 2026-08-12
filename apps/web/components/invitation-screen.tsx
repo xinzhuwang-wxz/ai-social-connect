@@ -86,7 +86,7 @@ export function InvitationsScreen() {
           </p>
           <a
             href="/"
-            className="mt-5 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+            className="mt-5 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
           >
             说说想做点什么
           </a>
@@ -143,7 +143,7 @@ export function InvitationScreen({ proposalId }: { proposalId: string }) {
           </p>
           <a
             href="/invitations"
-            className="mt-5 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+            className="mt-5 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
           >
             看看还有谁在等你
           </a>
@@ -215,7 +215,7 @@ function Broken({ onRetry }: { onRetry: () => void }) {
       <button
         type="button"
         onClick={onRetry}
-        className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+        className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
       >
         再试一次
       </button>
@@ -237,11 +237,11 @@ function InvitationCard({ invitation }: { invitation: Invitation }) {
     gateStatus(invitation.proposal_id).then(setStatus, () => setStatusDown(true));
   }, [invitation.proposal_id]);
 
-  async function answer(value: string, text?: string) {
+  async function answer(value: string, text?: string, remindMe = false) {
     setBusy(true);
     setFailed(false);
     try {
-      setStatus(await decide(invitation.proposal_id, value, text));
+      setStatus(await decide(invitation.proposal_id, value, text, remindMe));
       setStatusDown(false);
       setMine(value);
       setAsking(false);
@@ -322,7 +322,7 @@ function InvitationCard({ invitation }: { invitation: Invitation }) {
               type="button"
               disabled={busy}
               onClick={() => void answer(ACCEPTED)}
-              className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+              className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
             >
               我加入
             </button>
@@ -342,6 +342,18 @@ function InvitationCard({ invitation }: { invitation: Invitation }) {
               className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
             >
               我不参加
+            </button>
+            {/* 第四种回应。**不是第四个承诺档位**——是拒绝这一次，
+                外加把这件事缺的那几样记进「我想参与的」，下次有人缺同样的
+                东西时他会出现在候选里。
+                和拒绝一样便宜：一步完成，不问为什么。 */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void answer(DECLINED, undefined, true)}
+              className="rounded-[12px] px-3 py-2 text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink disabled:opacity-35"
+            >
+              以后类似的叫我
             </button>
           </div>
         )}
@@ -366,7 +378,7 @@ function InvitationCard({ invitation }: { invitation: Invitation }) {
               type="button"
               disabled={busy || !condition.trim()}
               onClick={() => void answer(CONDITIONAL, condition.trim())}
-              className="mt-2 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+              className="mt-2 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
             >
               就这么说
             </button>
@@ -401,14 +413,26 @@ function Answered({ mine, status }: { mine: string | null; status: GateStatus | 
     return (
       <div>
         <p className="text-[15px]">都点头了，这件事成了。</p>
-        {status?.formed_event_id && (
-          <a
-            href={`/events/${status.formed_event_id}/echo`}
-            className="mt-2 inline-block text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
-          >
-            去看这次留下了什么
-          </a>
-        )}
+        {/* 刚答应下来的人最想去的是**做事的地方**，不是回顾。
+            而这两个 id 原先只在答复那一次的响应里有，刷新一下就没了。 */}
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          {status?.space_id && (
+            <a
+              href={`/spaces/${status.space_id}`}
+              className="text-[14px] text-accent underline underline-offset-4"
+            >
+              去这件事的地方
+            </a>
+          )}
+          {status?.formed_event_id && (
+            <a
+              href={`/events/${status.formed_event_id}/echo`}
+              className="text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
+            >
+              这次留下了什么
+            </a>
+          )}
+        </div>
       </div>
     );
   }

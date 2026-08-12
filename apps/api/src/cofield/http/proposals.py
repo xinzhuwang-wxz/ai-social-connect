@@ -18,14 +18,20 @@ import sqlalchemy as sa
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from cofield.adapters.persistence.events import EventRepository
 from cofield.adapters.persistence.proposals import ProposalRepository
 from cofield.adapters.persistence.schema import formation_proposals
 from cofield.catalog import registry as action_kinds
 from cofield.formation.gate import CommitmentState
 from cofield.formation.service import ConfirmationGate
-from cofield.http.deps import CampusDep, ClockDep, ConnDep, PrincipalDep, ReposDep
-from cofield.matching.blocking import explain_recall
-from cofield.matching.funnel import Funnel
+from cofield.http.deps import (
+    CampusDep,
+    ClockDep,
+    ConnDep,
+    PrincipalDep,
+    ReposDep,
+    RetrieverDep,
+)
 from cofield.matching.window import Clearing, MarketBoard
 
 router = APIRouter(tags=["proposals"])
@@ -122,6 +128,15 @@ class DecideRequest(BaseModel):
     #: 把答复改回「还没回」没有真实含义。
     answer: str
     condition: str | None = None
+    #: 「这次不行，以后类似的叫我」。
+    #:
+    #: **它不是第四个承诺档位**，是拒绝这一次 + 留下一条线索：把这件事
+    #: 缺的那几样加进我的「我想参与的」，下一次有人缺同样的东西时我会
+    #: 出现在候选里。
+    #:
+    #: 做成档位的话，"他到底算不算同意了"就多出一种要解释的状态；
+    #: 而这件事的真实含义是**拒绝**加**一个偏好**，两者本来就该分开记。
+    remind_me: bool = False
 
 
 class ClearingOut(BaseModel):
@@ -158,13 +173,17 @@ def waiting(
 
 
 @router.post("/clearing:run", response_model=ClearingOut)
-def run_clearing(conn: ConnDep, campus: CampusDep, clock: ClockDep) -> ClearingOut:
+def run_clearing(
+    conn: ConnDep, campus: CampusDep, clock: ClockDep, retriever: RetrieverDep
+) -> ClearingOut:
     """把到点的市场单元结算一次。
 
     它存在是为了让**推进时钟就能看到配队发生**——演示不需要真等六小时。
     重复调用是安全的：同一个窗口内幂等。
     """
-    report = Clearing(conn, campus, action_kinds).run(now=clock.now())
+    report = Clearing(conn, campus, action_kinds, retriever=retriever).run(
+        now=clock.now()
+    )
     return ClearingOut(
         considered=report.considered,
         proposed=report.proposed,
@@ -210,19 +229,26 @@ def blocked_for(
     clock: ClockDep,
     repos: ReposDep,
     principal_id: PrincipalDep,
+    retriever: RetrieverDep,
 ) -> BlockedOut:
     """凑不出队时说什么。
 
     这一屏最容易被做成一句"暂无结果"，而那正是用户流失的地方。
+
+    **诊断走的是配队本身那条路**（`Clearing.diagnose`），不是这里另拼一份。
+    原先这里只调 `explain_recall`，于是不管实际卡在哪，它一律说
+    「现在还没有人能接上这件事」——校园里明明有一个人会剪辑，用户要的是
+    四个人的队，而屏上那句话是假的。他据此以为这个方向没人，
+    正确的下一步其实是把人数改小、或者自己拉两个人进来。
     """
     intent = repos.intents.get(intent_id)
     if intent is None or intent.principal_id != principal_id:
         raise HTTPException(status_code=404, detail="找不到这条需求")
 
     kind = action_kinds.get(intent.action_kind) if intent.action_kind else None
-    funnel = Funnel(conn, campus)
-    trace = funnel.shortlist(intent, now=clock.now()).trace
-    proof = explain_recall(funnel, intent, trace.blocked_by, kind=kind)
+    proof = Clearing(conn, campus, action_kinds, retriever=retriever).diagnose(
+        intent, now=clock.now(), kind=kind
+    )
 
     return BlockedOut(
         stage=proof.stage.value,
@@ -252,14 +278,27 @@ def blocked_for(
 def gate_status(
     proposal_id: UUID, conn: ConnDep, campus: CampusDep, clock: ClockDep
 ) -> GateStatusOut:
+    """还在等谁——以及**成了的话，这件事在哪**。
+
+    后面这半句原先只在 `:decide` 的响应里出现一次。于是最后点头的那个人
+    看得到入口，其余的人和任何一次刷新看到的都是一句「都点头了，这件事
+    成了。」——**刚答应下来的那件事没有门。**
+
+    一次性的响应不能是某个东西的唯一来源：用户会刷新，会从别的地方点回来，
+    会明天再打开。
+    """
     try:
         state = ConfirmationGate(conn, campus).status(proposal_id, now=clock.now())
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
+
+    formed = EventRepository(conn, campus).formed_from(proposal_id)
     return GateStatusOut(
         verdict=state.verdict.value,
         waiting_on=list(state.waiting_on),
         conditions=[text for _, text in state.conditions],
+        formed_event_id=formed[0] if formed else None,
+        space_id=formed[1] if formed else None,
     )
 
 
@@ -287,6 +326,7 @@ def decide(
     clock: ClockDep,
     repos: ReposDep,
     principal_id: PrincipalDep,
+    retriever: RetrieverDep,
 ) -> GateStatusOut:
     """一个真人做出决定。
 
@@ -311,13 +351,26 @@ def decide(
         # 它们是用户能理解并改正的情况，不是服务出错。
         raise HTTPException(status_code=422, detail=str(exc)) from None
 
+    if payload.remind_me and answer is CommitmentState.DECLINED:
+        # 「以后类似的叫我」= 把这件事缺的那几样加进他的「我想参与的」。
+        # 只在**拒绝**的时候有意义：加入了就不需要"以后再叫我"。
+        intent = repos.intents.get(_intent_of(conn, proposal_id))
+        if intent is not None:
+            me = repos.principals.get(principal_id)
+            wanted = list(intent.content.needs)
+            if me is not None:
+                wanted = [w for w in wanted if w not in me.open_to]
+            repos.principals.remind_about(principal_id, wanted)
+
     # 有人拒绝就**立刻**用剩下的人重解，不等下一个窗口。
     # 赶截止期的人等不起，而那正是他最需要系统帮忙的时刻。
     reformed = 0
     if outcome.resolve_excluding:
         intent = repos.intents.get(_intent_of(conn, proposal_id))
         if intent is not None:
-            reformed = Clearing(conn, campus, action_kinds).resolve_again(
+            reformed = Clearing(
+                conn, campus, action_kinds, retriever=retriever
+            ).resolve_again(
                 intent, excluding=outcome.resolve_excluding, now=clock.now()
             )
 

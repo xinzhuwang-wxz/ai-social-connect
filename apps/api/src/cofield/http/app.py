@@ -19,7 +19,9 @@ from cofield.http import (
     intents,
     memory,
     opportunities,
+    profile,
     proposals,
+    seeds,
     spaces,
     stash,
 )
@@ -48,6 +50,8 @@ def create_app() -> FastAPI:
     app.include_router(proposals.router, prefix="/api")
     app.include_router(spaces.router, prefix="/api")
     app.include_router(memory.router, prefix="/api")
+    app.include_router(profile.router, prefix="/api")
+    app.include_router(seeds.router, prefix="/api")
     app.include_router(echo.router, prefix="/api")
 
     @app.get("/api/health", tags=["ops"])

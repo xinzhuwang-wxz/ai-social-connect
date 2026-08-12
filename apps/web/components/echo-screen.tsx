@@ -25,6 +25,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import {
+  againFrom,
+  askThemAgain,
+  myMatchableIntents,
   CONFIRMED,
   DRAFT,
   REVOKED,
@@ -37,6 +40,8 @@ import {
   type Echo,
   type EchoRecord,
   type Evidence,
+  type Again,
+  type Intent,
 } from "@/lib/invitations";
 import { confirmRecord, myRecords, revokeRecord } from "@/lib/me";
 
@@ -56,6 +61,147 @@ const KINDS = [
 const KIND_WORDS: Record<string, string> = Object.fromEntries(
   KINDS.map((kind) => [kind.key, kind.label]),
 );
+
+/**
+ * 照这件事再来一次。
+ *
+ * PRD 的最后一段：第一次行动完成后产品进入下一轮 Loop。在它之前，
+ * 森林里的一株点进去**只能看**。
+ *
+ * 它带用户回到首屏，把上次的目标预填进去——**但不替他保存**：
+ * 抽取只产出草稿这条规矩在这里同样成立，尤其是时间和地点，
+ * 它们必然是新的。
+ */
+function AgainCard({ eventId }: { eventId: string }) {
+  const [again, setAgain] = useState<Again | null>(null);
+  // null = 还在取数，[] = 取出来没有可用需求或取数失败
+  const [intents, setIntents] = useState<Intent[] | null>(null);
+
+  useEffect(() => {
+    againFrom(eventId).then(setAgain, () => setAgain(null));
+    // 取不出来就当空，不影响这一屏其余部分
+    myMatchableIntents().then(
+      (all) => setIntents(all.filter((i) => i.is_matchable)),
+      () => setIntents([]),
+    );
+  }, [eventId]);
+
+  if (!again) return null;
+
+  const who = (again.last_time_with ?? []).map((m) => m.display_name).join("、");
+  const members = again.last_time_with ?? [];
+
+  return (
+    <section
+      aria-label="再来一次"
+      className="mb-8 rounded-[16px] border border-line bg-card p-5 shadow-[var(--shadow-card)]"
+    >
+      <h2 className="text-[16px] font-medium">还想再来一次吗</h2>
+      <p className="mt-1 text-[14px] text-ink-soft">
+        {who ? `上次是和${who}一起做的。` : ""}
+        照这件事再发一条，时间地点你自己重填——那两样必然是新的。
+      </p>
+      <a
+        href={`/?again=${encodeURIComponent(again.goal)}`}
+        className="mt-4 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
+      >
+        照这个再来一次
+      </a>
+      {/* 只有上次有同伴才有人可以问 */}
+      {members.length > 0 && (
+        <InviteSection eventId={eventId} members={members} intents={intents} />
+      )}
+    </section>
+  );
+}
+
+/**
+ * 把新需求问上次那几个人。
+ *
+ * 「问」不是「拉进来」——每个人收到的是一条待答复，要各自来决定（不变量 3）。
+ * intents 为 null 时还在取数，为 [] 时没有可用需求，两种情况都不显示这一块。
+ */
+function InviteSection({
+  eventId,
+  members,
+  intents,
+}: {
+  eventId: string;
+  members: Array<{ principal_id: string; display_name: string }>;
+  intents: Intent[] | null;
+}) {
+  const [intentId, setIntentId] = useState("");
+  const [busy, setBusy] = useState(false);
+  // 问过了就不再显示表单——防止重复轰炸同一批人
+  const [asked, setAsked] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (!intents || intents.length === 0) return null;
+
+  if (asked) {
+    return (
+      <div className="mt-4 rounded-[10px] border border-line p-4">
+        <p className="text-[14px]">问过了，等他们各自答复。</p>
+        <p className="mt-1 text-[13px] text-ink-soft">
+          这不是把他们拉进来——每个人收到的是一条待答复，要他们自己来决定。
+        </p>
+      </div>
+    );
+  }
+
+  async function ask() {
+    setBusy(true);
+    setFailed(false);
+    try {
+      await askThemAgain(
+        eventId,
+        intentId,
+        members.map((m) => m.principal_id),
+      );
+      setAsked(true);
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-4">
+      <p className="text-[13px] text-ink-soft">
+        发了新需求之后，也可以直接问他们要不要：
+      </p>
+      <div className="mt-2 flex flex-wrap items-end gap-2">
+        <select
+          value={intentId}
+          onChange={(e) => setIntentId(e.target.value)}
+          aria-label="选一条需求"
+          className="min-w-0 flex-1 rounded-[8px] border border-line bg-card p-2.5 text-[14px] outline-none focus:border-accent"
+        >
+          <option value="">选一条需求</option>
+          {intents.map((intent) => (
+            <option key={intent.id} value={intent.id}>
+              {intent.content.goal}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={busy || !intentId}
+          onClick={() => void ask()}
+          className="min-h-[44px] rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
+        >
+          问他们
+        </button>
+      </div>
+      {failed && (
+        <p role="alert" className="mt-2 text-[13px] text-clash">
+          没发出去，他们还没收到。再试一次？
+        </p>
+      )}
+    </div>
+  );
+}
 
 export function EchoScreen({ eventId }: { eventId: string }) {
   const [echo, setEcho] = useState<Echo | null>(null);
@@ -104,7 +250,7 @@ export function EchoScreen({ eventId }: { eventId: string }) {
           <button
             type="button"
             onClick={() => void load()}
-            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
           >
             再试一次
           </button>
@@ -135,6 +281,11 @@ export function EchoScreen({ eventId }: { eventId: string }) {
   if (empty) {
     return (
       <Shell title="这次留下了什么" lead={echo.event_title}>
+        {/* **空态这一屏也要有它。** 它原先只挂在"已经留下过东西"那条分支上，
+            而刚做完、还什么都没传的人恰恰是最可能想再来一次的那个——
+            于是那扇门在唯一需要它的时刻不存在。 */}
+        <AgainCard eventId={eventId} />
+
         <section className="rounded-[16px] border border-line bg-card p-6">
           <p className="text-[16px]">这次还没留下任何东西。</p>
           <p className="mt-2 text-[14px] text-ink-soft">
@@ -158,6 +309,10 @@ export function EchoScreen({ eventId }: { eventId: string }) {
 
   return (
     <Shell title="这次留下了什么" lead={echo.event_title}>
+      {/* 闭环的最后一步：一株结出下一颗种子（PRD 持续互动那一段）。
+          放在最上面——一个刚看完这次留下什么的人，正是最可能想再来一次的时候。 */}
+      <AgainCard eventId={eventId} />
+
       <section aria-label="留下的东西">
         <h2 className="text-[16px] font-medium">留下的东西</h2>
         {echo.evidence.length === 0 ? (
@@ -430,7 +585,7 @@ function LeaveSomething({
         type="button"
         disabled={busy || !title.trim()}
         onClick={() => void leave()}
-        className="mt-3 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+        className="mt-3 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
       >
         留下
       </button>
@@ -490,7 +645,7 @@ function WriteOne({
         type="button"
         disabled={busy || !text.trim()}
         onClick={() => void write()}
-        className="mt-2 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+        className="mt-2 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
       >
         记下来
       </button>
@@ -557,7 +712,7 @@ function RecordCard({
             type="button"
             disabled={busy}
             onClick={() => void run(confirmRecord)}
-            className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+            className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
           >
             对，是这样
           </button>

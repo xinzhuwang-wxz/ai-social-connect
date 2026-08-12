@@ -75,3 +75,89 @@ def test_every_alias_points_at_a_real_skill() -> None:
     """别名表指向词表外的词，等于给用户挖了个坑：他照着说，系统认了，
     然后匹配不到任何人。"""
     assert set(ALIASES.values()) <= SKILLS
+
+
+# --- 「三四个人」 ---
+
+
+def test_two_numbers_side_by_side_are_a_range_not_the_bigger_one() -> None:
+    """中文里紧挨着的两个数字就是一个范围，中间不写连接词。
+
+    读成「四到四」比用户说的更紧，而更紧的约束正是杀死匹配的东西——
+    真实走查里，一条"三四个人"的需求因此要求恰好四人，
+    校园里有人能接却凑不出队。
+    """
+    result = RuleIntentExtractor().extract("想拍支短片，缺个会剪辑的，三四个人", now=NOW)
+
+    size = result.content.team_size
+    assert size is not None
+    assert (size.minimum, size.maximum) == (3, 4)
+
+
+def test_a_plain_number_still_means_exactly_that_many() -> None:
+    """「四个人」就是四个人，不能被上一条顺手放宽。"""
+    result = RuleIntentExtractor().extract("想拍支短片，缺个会剪辑的，四个人", now=NOW)
+
+    size = result.content.team_size
+    assert size is not None
+    assert (size.minimum, size.maximum) == (4, 4)
+
+
+def test_the_majors_a_person_can_pick_are_the_ones_the_campus_has() -> None:
+    """真人能填的专业，必须就是仿真人口里存在的那批。
+
+    两处各写一份的话，真人能填出一个校园里根本不存在的专业，而跨专业
+    那条软目标会因此永远算不出东西来——**没有报错，只是那条目标失效了**。
+    技能词表已经有一条同样的用例守着，专业是后补的那一条。
+    """
+    from cofield.domain.model.skills import MAJORS
+    from cofield.simulation.population import MAJORS as POPULATION_MAJORS
+
+    assert set(MAJORS) == {name for name, _ in POPULATION_MAJORS}
+
+
+# --- 追问要能答 ---
+
+
+def test_every_option_carries_something_that_can_be_filled_in() -> None:
+    """选项不能只是几个词。
+
+    原先 `options` 是纯字符串，界面把它们当说明文字印出来——**用户读得到，
+    答不了**。一个答不了的追问比不问更糟：它明说了系统知道自己缺什么，
+    然后什么也不做。
+    """
+    result = RuleIntentExtractor().extract("想找人一起做点事", now=NOW)
+
+    assert result.follow_ups, "什么都没说清，却一个问题都不问"
+    for question in result.follow_ups:
+        for option in question.options:
+            assert option.label, "屏上没字"
+            # value 可以是空串（「没有硬性截止」「都行」就是把这一栏留空），
+            # 但它必须是一个**明确的答案**，不是缺省。
+            assert isinstance(option.value, str)
+
+
+def test_it_asks_what_narrows_the_most_first() -> None:
+    """缺的角色最能收窄可行集合，先问它；人数次之。
+
+    上限仍然是两个——多问一个就是多一次把不确定推回给用户。
+    """
+    result = RuleIntentExtractor().extract("周末想找人爬山", now=NOW)
+
+    assert len(result.follow_ups) <= 2
+    assert [q.narrows for q in result.follow_ups][:2] == ["needs", "team_size"]
+
+
+def test_a_time_option_is_a_real_moment_not_a_phrase() -> None:
+    """「这周内」得变成一个能存进时间列的时刻。
+
+    屏上不该出现 ISO 时间戳，卡里也不该出现「这周内」——所以标签和值
+    从一开始就是两样东西。
+    """
+    result = RuleIntentExtractor().extract("想拍个短片，缺个会剪辑的，三个人", now=NOW)
+    when = next(q for q in result.follow_ups if q.narrows == "time_window")
+
+    soon = next(o for o in when.options if o.label == "这周内")
+    assert datetime.fromisoformat(soon.value) > NOW
+    # 「没有硬性截止」是一个真实的答案：它把这一栏留空，而不是不回答。
+    assert next(o for o in when.options if "没有" in o.label).value == ""

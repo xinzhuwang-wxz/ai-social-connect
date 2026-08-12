@@ -102,6 +102,28 @@ class ProposalRepository:
             is not None
         )
 
+    def outstanding_for(self, intent_id: UUID, *, now: datetime) -> bool:
+        """这条需求还有没有人正等着答复。
+
+        和 `exists_since` 不是一回事：那个问的是"这个窗口跑过没有"，
+        用于清算幂等；这个问的是"外面还有没有一份没答的邀请"，用于挡住
+        **人主动按第二次**——那一路没有清算边界可依，边界只能是"上一份
+        还活着"。
+
+        过期的不算：有效期过了，被邀的人多半已经答应了别的事，这时候
+        再问一次是重新开始，不是重复轰炸。
+        """
+        return (
+            self._conn.execute(
+                sa.select(sa.literal(1))
+                .select_from(formation_proposals)
+                .where(formation_proposals.c.intent_id == intent_id)
+                .where(formation_proposals.c.expires_at > now)
+                .limit(1)
+            ).first()
+            is not None
+        )
+
     def list_for_intent(self, intent_id: UUID, *, now: datetime) -> list[Row[Any]]:
         """给「给你找的人」那一屏。过期的不给——过了有效期，
         被提案的人很可能已经答应了别的事，再展示等于让用户白跑一趟。"""

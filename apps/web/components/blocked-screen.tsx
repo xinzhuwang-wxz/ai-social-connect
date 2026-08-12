@@ -59,7 +59,7 @@ export function BlockedScreen({ intentId }: { intentId: string }) {
         <button
           type="button"
           onClick={() => void load()}
-          className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+          className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
         >
           再看一次
         </button>
@@ -87,7 +87,7 @@ export function BlockedScreen({ intentId }: { intentId: string }) {
         </p>
         <a
           href="/waiting"
-          className="mt-4 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+          className="mt-4 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
         >
           去看下次什么时候配
         </a>

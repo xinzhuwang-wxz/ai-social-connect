@@ -20,9 +20,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -30,11 +30,14 @@ from pydantic import AwareDatetime, BaseModel, Field
 from sqlalchemy import Connection
 
 from cofield.adapters.llm import Cassette, LiteLLMComposer
+from cofield.adapters.persistence.going import DayOf, GoingRepository
 from cofield.adapters.persistence.messages import Kind as MessageKind
 from cofield.adapters.persistence.messages import Message, MessageRepository
+from cofield.adapters.persistence.plans import Plan, PlanRepository
 from cofield.adapters.persistence.repositories import Repositories
-from cofield.adapters.persistence.schema import event_members
+from cofield.adapters.persistence.schema import event_members, spaces
 from cofield.adapters.persistence.spaces import Item, Space, SpaceRepository
+from cofield.domain.model import growth
 from cofield.domain.ports.composer import Composer, DraftKind
 from cofield.http.deps import (
     CampusDep,
@@ -46,12 +49,15 @@ from cofield.http.deps import (
 from cofield.space import (
     CONFIRMED_BY,
     DECIDERS,
+    OPTIONS,
     REACH,
     SOURCE,
+    VOTES,
     AgentCannotDecide,
     AgentIsOff,
     Canvas,
     CanvasRefused,
+    CanvasView,
     Card,
     DraftDoesNotCount,
     IllegalMove,
@@ -59,7 +65,7 @@ from cofield.space import (
     ItemKindRegistry,
     MissingProvenance,
     NotYoursToDecide,
-    Reach,
+    ItemReach,
     UnknownItemKind,
     field_agent,
     item_kinds,
@@ -223,7 +229,7 @@ class ItemOut(BaseModel):
     deciders: list[UUID] = []
     confirmed_by: list[UUID] = []
     #: 这样东西谁能看见。只有声明了可见范围的类型才有。
-    reach: Reach | None = None
+    reach: ItemReach | None = None
     source: str | None = None
     #: 这一刻这张卡该说的那句话。没什么要说的时候是 null——
     #: 每张卡都挂一句话等于每张卡都没话说。
@@ -251,7 +257,7 @@ class ItemOut(BaseModel):
             awaiting_a_person=item.awaiting_a_person,
             deciders=_people(item, DECIDERS),
             confirmed_by=_people(item, CONFIRMED_BY),
-            reach=Reach(raw_reach) if raw_reach else None,
+            reach=ItemReach(raw_reach) if raw_reach else None,
             source=str(raw_source) if raw_source else None,
             notice=notice,
         )
@@ -262,6 +268,17 @@ class ProgressOut(BaseModel):
 
     done: int
     total: int
+
+
+class MemberOut(BaseModel):
+    """这件事里的一个人。
+
+    名字不受逐项同意管——同意进一个小队本身就包含了同意在这里被指名，
+    否则"和谁一起做的"根本没法呈现。
+    """
+
+    principal_id: UUID
+    display_name: str
 
 
 class SpaceOut(BaseModel):
@@ -287,6 +304,125 @@ class SpaceOut(BaseModel):
     progress: ProgressOut
     #: 一句话概括这一屏。空空的空间说"还没有要做的事"，不是一片空白。
     summary: str
+    #: 这件事里都有谁。**PRD 要求房间顶部持续展示当前参与成员**，
+    #: 而在这之前这一屏根本不知道成员是谁——「还差谁确认」只能说"还差 2 个人"，
+    #: 而那催不动任何人。
+    members: list[MemberOut]
+    #: 长到哪一步了。**派生值**——由真实事实定档，不由聊天量定档（不变量 6）。
+    #: 聊了两百条而一件事都没定，它就停在「发芽了」，这不是惩罚是诚实。
+    growth: str
+    growth_word: str
+    growth_why: str
+
+
+class PlanOut(BaseModel):
+    """行动确认卡。
+
+    PRD 称它是**最重要的中间转化节点**：从一句模糊的"有空一起"，
+    变成一项明确的共同承诺。
+
+    它和成局那道门不是一回事——那道门问「要不要和这几个人组队」，
+    这张卡问「我们要做的到底是什么」。
+    """
+
+    #: 还没有人建过卡时为 `null`。**不是错误**，是"这件事还没定下来"。
+    exists: bool
+    title: str | None = None
+    starts_at: str | None = None
+    place: str | None = None
+    bring: str | None = None
+    budget: str | None = None
+    change_note: str | None = None
+    #: 已经点头、而且点的是**现行这一版**的人。
+    nodded: list[UUID] = Field(default_factory=list)
+    #: 还差谁点头。指名道姓——"还差 2 个人"催不动任何人。
+    waiting_on: list[UUID] = Field(default_factory=list)
+    #: 全员点头且要素齐了。到这一步植物结花苞。
+    confirmed: bool = False
+    #: 我点过头没有。界面据此决定给"我确认"还是"你已经确认过"。
+    i_nodded: bool = False
+    #: 还缺哪几样才算一张计划。**说得出缺什么**，不是一句"信息不全"。
+    missing: list[str] = Field(default_factory=list)
+
+
+class PlanIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    starts_at: str | None = None
+    place: str | None = Field(default=None, max_length=200)
+    bring: str | None = Field(default=None, max_length=500)
+    budget: str | None = Field(default=None, max_length=200)
+    change_note: str | None = Field(default=None, max_length=500)
+
+
+class StandingOut(BaseModel):
+    principal_id: UUID
+    display_name: str
+    #: ready / leaving / arrived / changed
+    state: str
+    word: str
+    note: str | None = None
+
+
+class DayOfOut(BaseModel):
+    """到那天了这一屏。
+
+    PRD：首版不需要持续定位，只要地址入口和必要状态。一个为了"看谁到了"
+    而常开的定位权限，换来的信息量还不如一句"我到了"。
+    """
+
+    #: 什么时候到那天。空表示计划还没定时间——那就还谈不上"到那天"。
+    starts_at: str | None = None
+    #: 现在该不该出现这一屏。行动前一天才出现，做完就收起来。
+    active: bool = False
+    where: str | None = None
+    bring: str | None = None
+    change_note: str | None = None
+    standings: list[StandingOut] = Field(default_factory=list)
+    my_state: str | None = None
+    #: 谁点过"做完了"。**全员点头才算完成。**
+    done_by: list[UUID] = Field(default_factory=list)
+    done_waiting_on: list[UUID] = Field(default_factory=list)
+    all_done: bool = False
+    i_marked_done: bool = False
+
+
+class DayOfIn(BaseModel):
+    #: ready / leaving / arrived / changed
+    state: str
+    #: 「临时有变」要能说一句为什么，不然它只是一个让人干着急的标记。
+    note: str | None = Field(default=None, max_length=200)
+
+
+class TallyOut(BaseModel):
+    """一个选项，和投它的人。
+
+    **票数实时可见。** 藏着计票会让人觉得系统在操纵，而这是一个五六个人
+    的组——他们本来就看得见彼此。
+    """
+
+    label: str
+    votes: int
+    #: 谁投的。指名道姓不是为了施压，是因为**藏起来他们也猜得到**，
+    #: 而猜出来的版本往往更伤人。
+    by: list[str] = Field(default_factory=list)
+
+
+class PollOut(BaseModel):
+    item_id: UUID
+    question: str
+    tally: list[TallyOut]
+    #: 我投的是第几个。没投过是 `null`。
+    my_choice: int | None = None
+    #: 还没投的人。**不是催**，是让发起的人知道还差谁。
+    waiting_on: list[str] = Field(default_factory=list)
+    #: 票最多的那个。**平票就是平票**，不替人破局。
+    leading: str | None = None
+    settled: bool = False
+
+
+class VoteRequest(BaseModel):
+    #: 第几个选项，从 0 起。
+    choice: int
 
 
 class AddItemRequest(BaseModel):
@@ -312,7 +448,7 @@ class ReviseItemRequest(BaseModel):
 
     state: str | None = None
     assignee_id: UUID | None = None
-    reach: Reach | None = None
+    reach: ItemReach | None = None
 
 
 class ToggleAgentRequest(BaseModel):
@@ -416,10 +552,52 @@ def _cards(group: Sequence[Card]) -> list[ItemOut]:
     return [ItemOut.of(c.item, label=c.label, notice=c.notice) for c in group]
 
 
+def _member_names(board: Board, repos: Repositories) -> dict[UUID, str]:
+    """成员 id → 名字。"还差 2 个人确认"催不动任何人，得指名道姓。"""
+    ids = _members_of(board)
+    return {
+        pid: (p.display_name if (p := repos.principals.get(pid)) else "一个人")
+        for pid in ids
+    }
+
+
+def _growth_of(board: Board, view: CanvasView) -> growth.Growth:
+    """这件事长到哪一步了。每一档都由**可查的事实**决定。
+
+    刻意不看聊天：不变量 6 说共域因真实行动证据生长，不因聊天量生长。
+    聊了两百条而一件事都没定，它就停在「发芽了」——这不是惩罚，是诚实。
+    """
+    repo = PlanRepository(board.conn, board.campus)
+    plan = repo.get(board.space.id)
+    confirmed = False
+    if plan is not None:
+        confirmed = repo.state(plan, members=_members_of(board)).confirmed
+
+    claimed = any(card.item.assignee_id is not None for card in view.cards)
+    # 「在长了」和「长出幼苗」的区别：有人认领 vs 事情真的在动。
+    # 分开两档是因为"有人领了但一直没开始"和"已经在做了"对用户是两件事。
+    moving = any(card.item.state in ("doing", "done") for card in view.cards)
+    # **开花靠全员点"做完了"，不靠"条目都打了勾"。**
+    # 一堆勾选完的待办不等于那件事真的发生过——而这个产品的终点是
+    # 真的一起完成了一次行动，不是一个清空的清单。
+    members = _members_of(board)
+    marked = GoingRepository(board.conn, board.campus).who_marked(board.space.id)
+    done = bool(members) and marked >= set(members)
+    return growth.of(
+        formed=True,  # 有空间就意味着已经成局——空间只在成局那一刻建出来
+        has_claimed_items=claimed,
+        in_progress=moving,
+        plan_confirmed=confirmed,
+        completed=done,
+        has_evidence=done,
+    )
+
+
 def _screen(board: Board, repos: Repositories, *, now: datetime) -> SpaceOut:
     view = board.canvas.view(
         now=now, names=_names(repos, board.repo.list_items(board.space.id))
     )
+    stage = _growth_of(board, view)
     return SpaceOut(
         id=board.space.id,
         title=view.title,
@@ -430,6 +608,13 @@ def _screen(board: Board, repos: Repositories, *, now: datetime) -> SpaceOut:
         drafts=_cards(view.drafts),
         progress=ProgressOut(done=view.progress.done, total=view.progress.total),
         summary=view.summary,
+        members=[
+            MemberOut(principal_id=pid, display_name=name)
+            for pid, name in _member_names(board, repos).items()
+        ],
+        growth=stage.stage.value,
+        growth_word=stage.word,
+        growth_why=stage.why,
     )
 
 
@@ -460,6 +645,280 @@ def get_space(board: BoardDep, repos: ReposDep, clock: ClockDep) -> SpaceOut:
     不是错误也不是一片空白。一屏能看见的四件事都在分组里。
     """
     return _screen(board, repos, now=clock.now())
+
+
+def _members_of(board: Board) -> tuple[UUID, ...]:
+    """这个空间对应事件的成员。**点头名单来自它**，不来自请求体。"""
+    rows = board.conn.execute(
+        sa.select(event_members.c.principal_id)
+        .select_from(
+            spaces.join(event_members, event_members.c.event_id == spaces.c.event_id)
+        )
+        .where(spaces.c.id == board.space.id)
+        .order_by(event_members.c.principal_id)
+    ).all()
+    return tuple(r.principal_id for r in rows)
+
+
+def _plan_screen(board: Board) -> PlanOut:
+    repo = PlanRepository(board.conn, board.campus)
+    plan = repo.get(board.space.id)
+    if plan is None:
+        return PlanOut(exists=False, missing=["什么时候", "在哪集合"])
+
+    state = repo.state(plan, members=_members_of(board))
+    missing: list[str] = []
+    if plan.starts_at is None:
+        missing.append("什么时候")
+    if not (plan.place or "").strip():
+        missing.append("在哪集合")
+    return PlanOut(
+        exists=True,
+        title=plan.title,
+        starts_at=plan.starts_at.isoformat() if plan.starts_at else None,
+        place=plan.place,
+        bring=plan.bring,
+        budget=plan.budget,
+        change_note=plan.change_note,
+        nodded=sorted(state.nodded, key=str),
+        waiting_on=list(state.waiting_on),
+        confirmed=state.confirmed,
+        i_nodded=board.me in state.nodded,
+        missing=missing,
+    )
+
+
+@router.get("/spaces/{space_id}/plan", response_model=PlanOut)
+def read_plan(board: BoardDep) -> PlanOut:
+    """这次到底要做什么。还没建过卡时返回一个空态，不是 404。"""
+    return _plan_screen(board)
+
+
+@router.put("/spaces/{space_id}/plan", response_model=PlanOut)
+def write_plan(payload: PlanIn, board: BoardDep, clock: ClockDep) -> PlanOut:
+    """写这张卡。**改任何一项，所有人的点头一起失效。**
+
+    不是"改完清空点头"，是点头记在这一版的摘要上——少写一处清空，
+    用户就会在一个自己没同意过的计划上显示成已同意，
+    而那是这个产品最不能出的错。
+    """
+    repo = PlanRepository(board.conn, board.campus)
+    current = repo.get(board.space.id)
+    starts_at: datetime | None = None
+    if payload.starts_at:
+        try:
+            starts_at = datetime.fromisoformat(payload.starts_at)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="看不懂这个时间") from None
+
+    plan = Plan(
+        id=current.id if current else uuid4(),
+        space_id=board.space.id,
+        title=payload.title,
+        starts_at=starts_at,
+        place=payload.place,
+        bring=payload.bring,
+        budget=payload.budget,
+        change_note=payload.change_note,
+    )
+    repo.save(plan, by=board.me, now=clock.now())
+    return _plan_screen(board)
+
+
+@router.post("/spaces/{space_id}/plan:confirm", response_model=PlanOut)
+def confirm_plan(board: BoardDep, clock: ClockDep) -> PlanOut:
+    """我确认这次就这么办。
+
+    **身份取自请求头。** 承诺只接受真人签名的命令——请求体里带 id
+    等于任何人都能替任何人承诺。
+    """
+    repo = PlanRepository(board.conn, board.campus)
+    plan = repo.get(board.space.id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail="还没有这张卡")
+    if board.me not in _members_of(board):
+        raise HTTPException(status_code=403, detail="你不在这件事里")
+    if not plan.settled:
+        # 一张没写什么时候、在哪的卡不是计划，是一个愿望。
+        # 让人对着一个愿望点头，等于让"确认"这个动作贬值。
+        raise HTTPException(status_code=422, detail="时间和地点还没写，先写清再确认")
+    repo.nod(plan, by=board.me, now=clock.now())
+    return _plan_screen(board)
+
+
+def _day_of_screen(board: Board, repos: Repositories, *, now: datetime) -> DayOfOut:
+    plans = PlanRepository(board.conn, board.campus)
+    plan = plans.get(board.space.id)
+    going = GoingRepository(board.conn, board.campus)
+    names = _member_names(board, repos)
+    members = tuple(names)
+
+    marked = going.who_marked(board.space.id)
+    standings = going.standings(board.space.id)
+    mine = next((s for s in standings if s.principal_id == board.me), None)
+
+    # **行动前一天才出现，做完就收起来。** 一个常驻的"我出发了"按钮在
+    # 事情还没定下来的时候只是噪音，而噪音会让人学会忽略这一整块。
+    starts = plan.starts_at if plan else None
+    active = bool(
+        starts is not None
+        and now >= starts - timedelta(days=1)
+        and not (members and marked >= set(members))
+    )
+
+    return DayOfOut(
+        starts_at=starts.isoformat() if starts else None,
+        active=active,
+        where=plan.place if plan else None,
+        bring=plan.bring if plan else None,
+        change_note=plan.change_note if plan else None,
+        standings=[
+            StandingOut(
+                principal_id=s.principal_id,
+                display_name=names.get(s.principal_id, "一个人"),
+                state=s.state.value,
+                word=s.word,
+                note=s.note,
+            )
+            for s in standings
+        ],
+        my_state=mine.state.value if mine else None,
+        done_by=sorted(marked, key=str),
+        done_waiting_on=[m for m in members if m not in marked],
+        all_done=bool(members) and marked >= set(members),
+        i_marked_done=board.me in marked,
+    )
+
+
+@router.get("/spaces/{space_id}/day-of", response_model=DayOfOut)
+def read_day_of(board: BoardDep, repos: ReposDep, clock: ClockDep) -> DayOfOut:
+    """到那天了这一屏。计划还没定时间时它是不激活的，不是错误。"""
+    return _day_of_screen(board, repos, now=clock.now())
+
+
+@router.put("/spaces/{space_id}/day-of", response_model=DayOfOut)
+def set_day_of(
+    payload: DayOfIn, board: BoardDep, repos: ReposDep, clock: ClockDep
+) -> DayOfOut:
+    """改我自己此刻的处境。**每人一条，覆盖**——它是处境不是历史。"""
+    try:
+        state = DayOf(payload.state)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="不认识这个状态") from None
+    if state is DayOf.CHANGED and not (payload.note or "").strip():
+        # 一个不说原因的"临时有变"只会让所有人干着急。
+        raise HTTPException(status_code=422, detail="说一句怎么了，别人才好接")
+    GoingRepository(board.conn, board.campus).set_state(
+        board.space.id,
+        by=board.me,
+        state=state,
+        note=(payload.note or "").strip() or None,
+        now=clock.now(),
+    )
+    return _day_of_screen(board, repos, now=clock.now())
+
+
+@router.post("/spaces/{space_id}/done", response_model=DayOfOut)
+def mark_done(board: BoardDep, repos: ReposDep, clock: ClockDep) -> DayOfOut:
+    """我这边做完了。
+
+    **全员点头才算完成。** 一个人说做完了就标记完成，等于让他替所有人宣布，
+    而这件事会写进每个人的森林。
+    """
+    if board.me not in _members_of(board):
+        raise HTTPException(status_code=403, detail="你不在这件事里")
+    GoingRepository(board.conn, board.campus).mark_done(
+        board.space.id, by=board.me, now=clock.now()
+    )
+    screen = _day_of_screen(board, repos, now=clock.now())
+
+    # 最后一个人点完，这件事才真的结束。
+    #
+    # **这一笔以前没人写。** 「做完了」只落在 `done_marks` 上，事件永远停在
+    # active——而森林里的「这件事做成了」、成长档到「开花了」、「这次留下了
+    # 什么」、「照这个再来一次」全都在等 completed。一整条下游建好了，
+    # 源头那一笔从没落过。
+    if screen.all_done:
+        repos.events.complete(board.space.event_id)
+
+    return screen
+
+
+@router.delete("/spaces/{space_id}/done", response_model=DayOfOut)
+def unmark_done(board: BoardDep, repos: ReposDep, clock: ClockDep) -> DayOfOut:
+    """点错了收回。不给收回的路，人就不敢点——而不敢点会让这一步整个失效。"""
+    GoingRepository(board.conn, board.campus).unmark_done(board.space.id, by=board.me)
+    return _day_of_screen(board, repos, now=clock.now())
+
+
+def _poll_of(board: Board, repos: Repositories, item: Item) -> PollOut:
+    names = _member_names(board, repos)
+    options = [str(o) for o in (item.extras.get(OPTIONS) or [])]
+    votes: dict[str, int] = {
+        str(k): int(v) for k, v in (item.extras.get(VOTES) or {}).items()
+    }
+    deciders = [str(u) for u in (item.extras.get(DECIDERS) or [])]
+
+    tally = [
+        TallyOut(
+            label=label,
+            votes=sum(1 for c in votes.values() if c == index),
+            by=[
+                names.get(UUID(who), "一个人")
+                for who, c in sorted(votes.items())
+                if c == index
+            ],
+        )
+        for index, label in enumerate(options)
+    ]
+    top = max((t.votes for t in tally), default=0)
+    winners = [t.label for t in tally if t.votes == top and top > 0]
+    return PollOut(
+        item_id=item.id,
+        question=item.title,
+        tally=tally,
+        my_choice=votes.get(str(board.me)),
+        waiting_on=[
+            names.get(UUID(d), "一个人") for d in deciders if d not in votes
+        ],
+        # 平票就说平票。替人破局等于替人做决定，而这一步的全部意义
+        # 正是把决定交回给人。
+        leading=winners[0] if len(winners) == 1 else None,
+        settled=item.state in board.kinds.get(item.kind).done_states,
+    )
+
+
+@router.get("/spaces/{space_id}/polls", response_model=list[PollOut])
+def list_polls(board: BoardDep, repos: ReposDep, clock: ClockDep) -> list[PollOut]:
+    """这个空间里正在投的票。"""
+    view = board.canvas.view(now=clock.now())
+    return [
+        _poll_of(board, repos, card.item)
+        for card in (*view.cards, *view.open_gates, *view.stuck)
+        if card.item.kind == "poll"
+    ]
+
+
+@router.post("/spaces/{space_id}/items/{item_id}:vote", response_model=PollOut)
+def vote(
+    item_id: UUID,
+    payload: VoteRequest,
+    board: BoardDep,
+    repos: ReposDep,
+    clock: ClockDep,
+) -> PollOut:
+    """投一票。改主意就再投一次——**一个人只能改自己那一票**。
+
+    票不关门：票最多的那个不会自己变成"定了"，仍然要有人点头。
+    一次投票是**表达**，不是承诺（不变量 11）。
+    """
+    try:
+        item = board.canvas.vote(
+            item_id, choice=payload.choice, by=person(board.me), now=clock.now()
+        )
+    except (IllegalMove, AgentCannotDecide, DraftDoesNotCount) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    return _poll_of(board, repos, item)
 
 
 @router.post("/spaces/{space_id}/items", response_model=ItemOut, status_code=201)

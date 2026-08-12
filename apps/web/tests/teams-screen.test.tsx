@@ -196,11 +196,16 @@ describe("为什么是这几个人", () => {
     expect(screen.getByRole("button", { name: "苏晚没拍过夜景，这块还没底" })).toBeVisible();
   });
 
-  it("稳不稳只给结论，不给过程", async () => {
+  it("稳不稳先给结论，过程收在后面", async () => {
+    // 后端那句话是**可证伪**的完整论证（"任指一人一组都可以逐条核"），
+    // 那是给要复核的人准备的，不是给正在挑队的人看的第一眼。
+    // 摊开来占六行，而三张卡摊三遍——结论就此被淹掉。
     mockApi();
     render(<TeamsScreen intentId={INTENT_ID} />);
 
-    expect(await screen.findByText("他们现在都没有更想去的组")).toBeVisible();
+    expect(await screen.findAllByText("没有人更想去别的组")).not.toHaveLength(0);
+    // 过程仍然到得了：一次点击，不是删掉。
+    expect(screen.getAllByText(/他们现在都没有更想去的组/)[0]).toBeInTheDocument();
   });
 });
 
@@ -215,7 +220,7 @@ describe("三个动作", () => {
       expect(within(card()).getByText("还差苏晚、陈牧点头。")).toBeVisible();
     });
     expect(decides(calls)).toHaveLength(1);
-    expect(lastDecide(calls)).toEqual({ answer: "accepted", condition: null });
+    expect(lastDecide(calls)).toMatchObject({ answer: "accepted", condition: null });
   });
 
   it("拒绝是一步完成的，不再问一次，也不问为什么", async () => {
@@ -226,7 +231,7 @@ describe("三个动作", () => {
 
     expect(await screen.findByText("知道了。这次就到这里。")).toBeVisible();
     expect(decides(calls)).toHaveLength(1);
-    expect(lastDecide(calls)).toEqual({ answer: "declined", condition: null });
+    expect(lastDecide(calls)).toMatchObject({ answer: "declined", condition: null });
     // 没有二次确认，也没有追问理由的输入框。
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("button", { name: /确定|确认|再想想|为什么/ })).toBeNull();
@@ -273,8 +278,7 @@ describe("三个动作", () => {
     await userEvent.click(screen.getByRole("button", { name: "就这么说" }));
 
     await waitFor(() => {
-      expect(lastDecide(calls)).toEqual({
-        answer: "conditional",
+      expect(lastDecide(calls)).toMatchObject({ answer: "conditional",
         condition: "周四我要上课，换成周三我就来",
       });
     });

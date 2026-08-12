@@ -15,9 +15,11 @@ from cofield.domain.model.intent import (
     IntentContent,
     IntentSignal,
     IntentState,
+    Reach,
     TeamSize,
     TimeWindow,
 )
+from cofield.domain.model.skills import normalise
 from cofield.domain.ports.intent_extractor import ExtractionFailed
 from cofield.http.deps import (
     ClockDep,
@@ -122,6 +124,9 @@ def create_intent(
         content=_to_domain(payload.content),
         created_at=clock.now(),
         action_kind=payload.action_kind,
+        # 认不出来的范围一律按全校：**冷启动时缩小范围等于没有匹配**，
+        # 而一个打错字的参数不该让他的需求悄悄没人看见。
+        reach=Reach(payload.reach) if payload.reach in set(Reach) else Reach.CAMPUS,
     )
     repos.intents.save(signal)
     return IntentOut.of(signal)
@@ -174,6 +179,23 @@ def confirm_intent(intent_id: UUID, repos: ReposDep, clock: ClockDep) -> IntentO
             },
         ) from exc
     repos.intents.save(confirmed)
+
+    # **他刚在一件具体的事情里说了自己能出什么。** 记下来，他就能被别人找到。
+    #
+    # 少了这一步，产品的前提是"你得先跟软件交代自己"：只有去那一屏打过勾的
+    # 人才可能出现在任何人的候选里。而人真正说清自己的时刻不在表单里，
+    # 在这里——「我能出写脚本」是他为了这件事本来就要写的一句话，
+    # 有具体语境，比对着技能表打勾可靠。
+    #
+    # 归一到词表，词表外的照旧留给原话那一路（`raw_expression` 进语义索引）。
+    repos.principals.learned(
+        confirmed.principal_id,
+        [
+            matched
+            for offer in confirmed.content.offers
+            if (matched := normalise(offer)) is not None
+        ],
+    )
     return IntentOut.of(confirmed)
 
 

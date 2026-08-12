@@ -42,13 +42,22 @@ DISCARDED = "discarded"
 #: `extras` 里几个有约定含义的键。
 DECIDERS = "deciders"
 CONFIRMED_BY = "confirmed_by"
+#: 投票的选项与票。**票记在这里而不是另开一张表**：一次投票是这条条目
+#: 的一部分，它随条目一起来、一起走，没有独立于它的生命周期。
+OPTIONS = "options"
+VOTES = "votes"
 ABOUT = "about"
 SOURCE = "source"
 REACH = "reach"
 
 
-class Reach(StrEnum):
-    """一样东西谁能看见。
+class ItemReach(StrEnum):
+    """画布上一样东西谁能看见。
+
+    **名字里带 Item 是必须的**：需求那一侧另有一个「投给谁」（`intent.Reach`），
+    两个都叫 Reach 的时候契约里只活下来一个，而前端拿到的会是另一个概念的
+    取值——一个概念在 DB / API / 前端同名，反过来说就是两个概念不能同名。
+
 
     只有两档，且默认是窄的那一档。档位多了就没人认真选，
     而"发出去"这件事不该有一个随手滑过去的中间态。
@@ -286,7 +295,7 @@ class Canvas:
             payload[DECIDERS] = [str(u) for u in _uuids(payload, DECIDERS)]
             payload.setdefault(CONFIRMED_BY, [])
         if REACH in kind.required_extras:
-            payload[REACH] = Reach(payload[REACH]).value
+            payload[REACH] = ItemReach(payload[REACH]).value
 
         item = Item(
             id=uuid4(),
@@ -386,8 +395,44 @@ class Canvas:
             state = sorted(kind.done_states)[0]
         return self._save(replace(item, state=state, extras=extras, updated_at=now))
 
+    def vote(self, item_id: UUID, *, choice: int, by: Actor, now: datetime) -> Item:
+        """投一票。改主意就再投一次——**一个人只能改自己那一票**。
+
+        ## 为什么票不自动生效
+
+        票多的那个不会自己变成"定了"。不变量 11：AI 可以代为表达，
+        但不能代为承诺；而一次投票是**表达**，把它直接当成承诺，
+        "谁同意了什么"就没有可查的答案了。
+
+        所以投票关不上这条条目——关上它仍然要有人点头（`needs_human_decision`）。
+        投票买到的是**收敛**：一屋子人各说各的，那件事永远定不下来。
+
+        ## 助手投不了票
+
+        它没有一票。这和"要真人点头的事助手关不掉"是同一条。
+        """
+        item, kind = self._load(item_id)
+        if OPTIONS not in kind.required_extras:
+            raise IllegalMove(f"{kind.key} 上没有可投的东西")
+        if by.is_agent:
+            raise AgentCannotDecide("助手没有票")
+        if item.awaiting_a_person:
+            raise DraftDoesNotCount("助手起草的这一条还没人认，投它没有意义")
+        if item.state in kind.done_states:
+            raise IllegalMove("这件事已经定了")
+
+        options = list(item.extras.get(OPTIONS) or [])
+        if not 0 <= choice < len(options):
+            raise IllegalMove("没有这个选项")
+
+        votes = dict(item.extras.get(VOTES) or {})
+        votes[str(by.id)] = choice
+        extras = dict(item.extras)
+        extras[VOTES] = votes
+        return self._save(replace(item, extras=extras, updated_at=now))
+
     def change_reach(
-        self, item_id: UUID, *, to: Reach, by: Actor, now: datetime
+        self, item_id: UUID, *, to: ItemReach, by: Actor, now: datetime
     ) -> Item:
         """改一样东西谁能看见。
 
@@ -406,8 +451,8 @@ class Canvas:
         if item.awaiting_a_person:
             raise DraftDoesNotCount("还没人认的草稿谈不上发不发")
 
-        current = Reach(item.extras.get(REACH, Reach.OURS))
-        if to is Reach.OUTSIDE and current is Reach.OURS and not self._cleared(item.id):
+        current = ItemReach(item.extras.get(REACH, ItemReach.OURS))
+        if to is ItemReach.OUTSIDE and current is ItemReach.OURS and not self._cleared(item.id):
             raise NotYoursToDecide("发到外面去，得相关的人先点过头")
 
         extras = dict(item.extras)

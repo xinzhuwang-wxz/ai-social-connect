@@ -137,7 +137,7 @@ export function OpportunityForm() {
           <button
             type="button"
             onClick={() => void load()}
-            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
           >
             再看一次
           </button>
@@ -325,7 +325,7 @@ export function OpportunityForm() {
           type="button"
           disabled={busy}
           onClick={() => void send()}
-          className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+          className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
         >
           {busy ? "发着…" : "发出去"}
         </button>

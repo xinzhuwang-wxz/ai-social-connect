@@ -310,6 +310,51 @@ class FieldAgent:
             )
         return tuple(asked)
 
+    def propose_poll(
+        self,
+        token: Capability,
+        *,
+        about: tuple[UUID, str],
+        options: Sequence[str],
+        already_asked: frozenset[UUID],
+        now: datetime,
+    ) -> Suggestion | None:
+        """就一件还没定的事，提议投一次票。
+
+        ## 为什么这不是"替他们决定"
+
+        它只提议一次**表决的形式**，不提议结果，也关不上那件事——票最多的
+        那个仍然要有人点头（不变量 11）。助手买到的是**收敛**：一屋子人
+        各说各的，那件事永远定不下来。
+
+        ## 三条约束和话题卡完全一样
+
+        - 只能就**已经存在的**未定项发起。凭空造一次投票和凭空造一个话题
+          一样，会很快被所有人忽略
+        - 同一件事不发第二次（`already_asked`）
+        - 它是**建议**，落进画布之前不算数——所以返回 `Suggestion`，
+          不直接写
+
+        ## 选项从哪来
+
+        由调用方给。助手不发明选项：一个它自己编出来的"东湖 / 磨山"
+        很可能两个都不是这几个人在说的地方，而那时候投票只会让人更烦。
+        """
+        self.check(token, Power.ASK, now=now)
+        item_id, what = about
+        if item_id in already_asked:
+            return None
+        picks = [o.strip() for o in options if o.strip()]
+        if len(picks) < 2:
+            # 一个选项的投票不是投票，是通知。
+            return None
+
+        return Suggestion(
+            kind="poll",
+            title=what,
+            grounded_in=(what, *picks),
+        )
+
     def put_on_canvas(
         self, token: Capability, suggestion: Suggestion, *, now: datetime
     ) -> Suggestion:

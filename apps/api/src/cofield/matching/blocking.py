@@ -112,12 +112,14 @@ _FIELD_WORDS: dict[str, str] = {
     "location_scope": "限定在这个校区",
     "time_window": "这个时间范围",
     "team_size": "这个人数",
+    "reach": "只问一起做成过事的人",
 }
 
 _RELAX_WORDS: dict[str, str] = {
     "needs": "少要一样本事，自己补上其中一件",
     "location_scope": "先不限校区",
     "time_window": "把时间放宽几天",
+    "reach": "也问问还没一起做过事的人",
     "team_size": "少一个人也开始",
 }
 

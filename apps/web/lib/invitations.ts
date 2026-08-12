@@ -20,6 +20,36 @@ export type NewEvidence = components["schemas"]["EvidenceIn"];
 export type Recap = components["schemas"]["RecapOut"];
 export type Draft = components["schemas"]["DraftOut"];
 
+export type Again = components["schemas"]["AgainOut"];
+export type Intent = components["schemas"]["IntentOut"];
+
+/** 照这件事再来一次：一张**还没保存**的草稿。
+ *
+ *  它不直接建需求——抽取只产出草稿这条规矩在这里同样成立：带过来的东西
+ *  要让本人过目，尤其是时间和地点，它们必然是新的。 */
+export const againFrom = (eventId: string) =>
+  request<Again>(`/api/events/${eventId}/again`);
+
+/** 我发过的所有需求。调用方自己过滤 is_matchable。 */
+export const myMatchableIntents = () => request<Intent[]>("/api/me/intents");
+
+/**
+ * 把这条新需求问上次那几个人。
+ *
+ * **不是把他们拉进来**——不变量 3：成局前只有提案，没有关系。
+ * 每个人收到的是一条待答复，要各自点头才算进来。
+ * 返回 { asked: N }，N 是发出去几条待答复（过求解器和稳定性检查，不稳定就是 0）。
+ */
+export const askThemAgain = (
+  eventId: string,
+  intentId: string,
+  invite: string[],
+) =>
+  request<{ [key: string]: number }>(`/api/events/${eventId}:again`, {
+    method: "POST",
+    body: JSON.stringify({ intent_id: intentId, invite }),
+  });
+
 /**
  * 一条记录的三种处境。
  *
@@ -48,27 +78,31 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 // --- 这次你会得到什么 -------------------------------------------------------
 
-/** 我被邀请进了哪几队。只有 id——一队长什么样要再问一次。 */
-export const myInvitationIds = () => request<string[]>("/api/me/proposals");
-
-/** 这一队里我会得到什么。不在名单上的人拿到 404。 */
+/** 这一队里我会得到什么。不在名单上的人拿到 404。
+ *  从通知点进来看单独一队时用它；整页列表**不用**——见下。 */
 export const invitationFor = (proposalId: string) =>
   request<Invitation>(`/api/proposals/${proposalId}/invitation`);
 
 /**
  * 我被邀请进的每一队，连内容一起。
  *
- * 取不出的那几条**跳过**：一队坏掉不该让其余几队跟着看不见，而看不见的
- * 那几队正有人在等答复。全都取不出来才算这一屏坏了。
+ * ## 这里曾经是一个 N+1，而且是坏的
+ *
+ * 原先它先取一串 id，再逐个去问内容。可 `/api/me/proposals` 返回的从来
+ * 就是**完整的邀请对象**，不是 id 字符串——于是拼出来的路径是
+ * `/api/proposals/[object Object]/invitation`，每一条都 422，
+ * 整屏退到「现在调不出等你答复的事」。
+ *
+ * 而导航上那个「有 N 件事等你答复」读的是同一个接口、按对象解析，所以
+ * 它显示 3。**用户看到"有 3 件事等你答复"，点进去是一句"调不出来"。**
+ *
+ * TypeScript 没能挡住：那一步的返回类型是手写的 `string[]` 而不是
+ * codegen 出来的——「不手写任何接口类型」这条规矩正是为了防这个。
+ *
+ * 现在一次取完。少一轮 N+1，也少一处会和后端漂移的手写类型。
  */
 export async function myInvitations(): Promise<Invitation[]> {
-  const ids = await myInvitationIds();
-  const settled = await Promise.allSettled(ids.map(invitationFor));
-  const got = settled.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-  if (ids.length > 0 && got.length === 0) {
-    throw new ApiError(503, "一条都没取出来");
-  }
-  return got;
+  return request<Invitation[]>("/api/me/proposals");
 }
 
 // --- 这次留下了什么 ---------------------------------------------------------

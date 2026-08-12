@@ -18,6 +18,7 @@ from cofield.domain.model.intent import (
     IntentContent,
     IntentSignal,
     IntentState,
+    Reach,
     TeamSize,
     TimeWindow,
 )
@@ -56,6 +57,7 @@ def _to_domain(row: Row[tuple[object, ...]]) -> IntentSignal:
         created_at=row.created_at,
         expires_at=row.expires_at,
         action_kind=row.action_kind,
+        reach=Reach(row.reach),
     )
 
 
@@ -79,6 +81,7 @@ def _to_row(signal: IntentSignal, campus_id: str) -> dict[str, object]:
         "open_questions": list(c.open_questions),
         "uncertain_fields": sorted(c.uncertain_fields),
         "action_kind": signal.action_kind,
+        "reach": signal.reach.value,
         "created_at": signal.created_at,
         "expires_at": signal.expires_at,
     }

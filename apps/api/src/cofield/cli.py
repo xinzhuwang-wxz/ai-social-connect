@@ -95,6 +95,7 @@ def _seed(size: int, seed: int, url: str) -> int:
     _organizers(engine, clock, population, now=now, seed=seed)
     demo = _demo_person(engine, clock)
     print(f"演示账号 {demo.display_name} → {DEMO_CAMPUS}（id {demo.id}）")
+    _organizers_for_real_people(engine, clock, demo, now=now, seed=seed)
     print()
     print("打开 http://localhost:3000 ，请求头带：")
     print(f"  X-Principal-Id: {demo.id}")
@@ -156,6 +157,73 @@ def _organizers(
                 count += 1
 
     print(f"组织 {len(created)} 个、招募 {count} 份 → {SIM_CAMPUS}")
+
+
+def _organizers_for_real_people(
+    engine: object, clock: SystemClock, steward: Principal, *, now: datetime, seed: int
+) -> None:
+    """真人租户里也要有组织和招募。
+
+    ## 为什么这不是可选的
+
+    真人打开的是 `demo-campus`，而上面那一批全播在 `simulation`。于是
+    一个刚打开这个网页的人看到的是：
+
+    - 「有哪些招募」空的
+    - 「发一份招募」一句"还没有哪个组织能在这里招人"——**死路**
+    - 而这两屏在仿真租户里都是满的
+
+    每一片都做好了，真人那一侧却是空的。这个洞躲过了所有测试，因为
+    测试自己建数据；也躲过了仿真，因为仿真跑在另一个租户上。
+
+    ## 为什么这不违反租户隔离
+
+    隔离要挡的是**合成主体出现在真人面前**——真人不该以为自己在和真人
+    配队。组织和招募不是人：一份经核验的社团招募是现实里真实存在的东西。
+    所以这里的 `steward_id` 指向**真人租户里那个真人账号**，
+    一个合成主体都不跨过来。
+
+    份数比仿真那边少：这一屏是给人看的，不是给基准跑的。
+    """
+    rng = random.Random(seed + 1)
+
+    with owner_connection(engine) as conn:  # type: ignore[arg-type]
+        orgs = OrganizationRepository(conn, clock, DEMO_CAMPUS)
+        opps = OpportunityRepository(conn, clock, DEMO_CAMPUS)
+
+        created = []
+        for name, _kind in ORGANIZERS:
+            organization = Organization(
+                id=uuid4(),
+                campus_id=CampusId(DEMO_CAMPUS),
+                name=name,
+                verified=True,
+            )
+            orgs.add(organization)
+            created.append(organization)
+
+        count = 0
+        for index, (title, goal, roles) in enumerate(BRIEFS):
+            organization = created[index % len(created)]
+            opps.add(
+                ActionOpportunity(
+                    id=uuid4(),
+                    organization_id=organization.id,
+                    kind_key=ORGANIZERS[index % len(ORGANIZERS)][1],
+                    title=f"{title}（{organization.name}）",
+                    goal=goal,
+                    seats=tuple(
+                        Seat(role=role, capacity=capacity) for role, capacity in roles
+                    ),
+                    steward_id=steward.id,
+                    deadline=now + timedelta(days=rng.randint(3, 21)),
+                    created_at=now,
+                    location_scope=rng.choice(("东校区", "西校区", "南校区", None)),
+                )
+            )
+            count += 1
+
+    print(f"组织 {len(created)} 个、招募 {count} 份 → {DEMO_CAMPUS}")
 
 
 def _demo_person(engine: object, clock: SystemClock) -> Principal:

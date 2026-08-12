@@ -423,6 +423,12 @@ export interface paths {
          * @description 凑不出队时说什么。
          *
          *     这一屏最容易被做成一句"暂无结果"，而那正是用户流失的地方。
+         *
+         *     **诊断走的是配队本身那条路**（`Clearing.diagnose`），不是这里另拼一份。
+         *     原先这里只调 `explain_recall`，于是不管实际卡在哪，它一律说
+         *     「现在还没有人能接上这件事」——校园里明明有一个人会剪辑，用户要的是
+         *     四个人的队，而屏上那句话是假的。他据此以为这个方向没人，
+         *     正确的下一步其实是把人数改小、或者自己拉两个人进来。
          */
         get: operations["blocked_for_api_intents__intent_id__blocked_get"];
         put?: never;
@@ -440,7 +446,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Gate Status */
+        /**
+         * Gate Status
+         * @description 还在等谁——以及**成了的话，这件事在哪**。
+         *
+         *     后面这半句原先只在 `:decide` 的响应里出现一次。于是最后点头的那个人
+         *     看得到入口，其余的人和任何一次刷新看到的都是一句「都点头了，这件事
+         *     成了。」——**刚答应下来的那件事没有门。**
+         *
+         *     一次性的响应不能是某个东西的唯一来源：用户会刷新，会从别的地方点回来，
+         *     会明天再打开。
+         */
         get: operations["gate_status_api_proposals__proposal_id__status_get"];
         put?: never;
         post?: never;
@@ -533,6 +549,151 @@ export interface paths {
         get: operations["get_space_api_spaces__space_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Plan
+         * @description 这次到底要做什么。还没建过卡时返回一个空态，不是 404。
+         */
+        get: operations["read_plan_api_spaces__space_id__plan_get"];
+        /**
+         * Write Plan
+         * @description 写这张卡。**改任何一项，所有人的点头一起失效。**
+         *
+         *     不是"改完清空点头"，是点头记在这一版的摘要上——少写一处清空，
+         *     用户就会在一个自己没同意过的计划上显示成已同意，
+         *     而那是这个产品最不能出的错。
+         */
+        put: operations["write_plan_api_spaces__space_id__plan_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/plan:confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Plan
+         * @description 我确认这次就这么办。
+         *
+         *     **身份取自请求头。** 承诺只接受真人签名的命令——请求体里带 id
+         *     等于任何人都能替任何人承诺。
+         */
+        post: operations["confirm_plan_api_spaces__space_id__plan_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/day-of": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Day Of
+         * @description 到那天了这一屏。计划还没定时间时它是不激活的，不是错误。
+         */
+        get: operations["read_day_of_api_spaces__space_id__day_of_get"];
+        /**
+         * Set Day Of
+         * @description 改我自己此刻的处境。**每人一条，覆盖**——它是处境不是历史。
+         */
+        put: operations["set_day_of_api_spaces__space_id__day_of_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Done
+         * @description 我这边做完了。
+         *
+         *     **全员点头才算完成。** 一个人说做完了就标记完成，等于让他替所有人宣布，
+         *     而这件事会写进每个人的森林。
+         */
+        post: operations["mark_done_api_spaces__space_id__done_post"];
+        /**
+         * Unmark Done
+         * @description 点错了收回。不给收回的路，人就不敢点——而不敢点会让这一步整个失效。
+         */
+        delete: operations["unmark_done_api_spaces__space_id__done_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/polls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Polls
+         * @description 这个空间里正在投的票。
+         */
+        get: operations["list_polls_api_spaces__space_id__polls_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/items/{item_id}:vote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vote
+         * @description 投一票。改主意就再投一次——**一个人只能改自己那一票**。
+         *
+         *     票不关门：票最多的那个不会自己变成"定了"，仍然要有人点头。
+         *     一次投票是**表达**，不是承诺（不变量 11）。
+         */
+        post: operations["vote_api_spaces__space_id__items__item_id__vote_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -769,6 +930,79 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/events/{event_id}/again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Again
+         * @description 照这件事再来一次，先给一张草稿。
+         */
+        get: operations["again_api_events__event_id__again_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/{event_id}:again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Them Again
+         * @description 把这条新需求直接问上次那几个人。
+         *
+         *     **不是把他们拉进来。** 不变量 3：成局前只有提案，没有关系——所以这里
+         *     产出的仍然是一个要每个人各自点头的提案。"一键重新邀请"指的是
+         *     "一键问他们"，不是"一键把他们算进去"。
+         *
+         *     仍然过求解器和稳定性检查：上次一起做成过，不等于这次这几个人凑得成
+         *     一个组。跳过这两步等于给他们一个看起来成立、实际不成立的提案。
+         */
+        post: operations["ask_them_again_api_events__event_id__again_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/coming-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Coming Up
+         * @description 我这两天要出发的事。
+         *
+         *     只看**已经定下来时间**的（行动确认卡写了 `starts_at`）。没定时间的事
+         *     不该出现在这里——它不是"快到了"，它是"还没定"，而那一句在别处说。
+         *
+         *     窗口是从现在到 36 小时后：够覆盖"明天出发"，又不会把下周的事提前
+         *     塞进来。提前太多的提醒和不提醒一样，人会学会忽略它。
+         */
+        get: operations["coming_up_api_me_coming_up_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/facets": {
         parameters: {
             query?: never;
@@ -856,6 +1090,135 @@ export interface paths {
         get: operations["my_visibility_api_me_visibility_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vocabulary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vocabulary */
+        get: operations["vocabulary_api_vocabulary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read
+         * @description 我这边现在是什么样。
+         *
+         *     身份第一次出现时 `get_repositories` 已经把行建好了，所以这里不会
+         *     遇到"人不存在"——那一步放在依赖里而不是每个端点各自记得做。
+         */
+        get: operations["read_api_me_profile_get"];
+        /**
+         * Write
+         * @description 改写我这边。整份覆盖，不是追加——"我不再想参与拍摄了"必须说得出口。
+         */
+        put: operations["write_api_me_profile_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/me/seeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * My Seeds
+         * @description 我的信箱。已经找到同行者的种子不再占地方。
+         */
+        get: operations["my_seeds_api_me_seeds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/seeds/{intent_id}:respond": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Respond
+         * @description 愿意参与，或者这次不感兴趣。
+         *
+         *     **愿意不等于加入**：还要发起人挑中才成局。这一句必须在界面上说清楚，
+         *     否则用户会以为自己已经答应了，然后在没被选中时觉得被放了鸽子。
+         */
+        post: operations["respond_api_seeds__intent_id__respond_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/intents/{intent_id}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Candidates
+         * @description 谁说了愿意。发起人在这一屏挑人。
+         */
+        get: operations["candidates_api_intents__intent_id__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/intents/{intent_id}/candidates/{who}:choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose
+         * @description 挑一个人。收满就成局。
+         *
+         *     **AI 不替发起人做这一下。** 它排序、它解释，但按下去的必须是人。
+         */
+        post: operations["choose_api_intents__intent_id__candidates__who__choose_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1059,6 +1422,40 @@ export interface components {
             };
         };
         /**
+         * AgainOut
+         * @description 照上次再来一次：一张**还没保存**的草稿。
+         *
+         *     PRD 的最后一段（持续互动）。第一次行动完成后产品进入下一轮 Loop——
+         *     而在这之前，森林里的一株点进去只能看。
+         *
+         *     **它不直接建需求。** 抽取只产出草稿这条规矩在这里同样成立：
+         *     带过来的东西要让本人过目，尤其是时间和地点——它们必然是新的。
+         */
+        AgainOut: {
+            /** Goal */
+            goal: string;
+            /** Offers */
+            offers: string[];
+            /** Needs */
+            needs: string[];
+            /** Team Min */
+            team_min?: number | null;
+            /** Team Max */
+            team_max?: number | null;
+            /** Last Time With */
+            last_time_with?: components["schemas"]["cofield__http__memory__MemberOut"][];
+        };
+        /** AgainRequest */
+        AgainRequest: {
+            /**
+             * Intent Id
+             * Format: uuid
+             */
+            intent_id: string;
+            /** Invite */
+            invite?: string[];
+        };
+        /**
          * BlockedOut
          * @description 「还差这几件事」那一屏。凑不出队时把挫败换成一个具体的下一步。
          */
@@ -1073,6 +1470,48 @@ export interface components {
             relaxations: components["schemas"]["RelaxationOut"][];
             /** Next Steps */
             next_steps: components["schemas"]["NextStepOut"][];
+        };
+        /**
+         * CandidateOut
+         * @description 一个说了愿意的人。
+         */
+        CandidateOut: {
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Why */
+            why: string[];
+            /** Note */
+            note?: string | null;
+            /**
+             * Chosen
+             * @default false
+             */
+            chosen: boolean;
+        };
+        /**
+         * CandidatesOut
+         * @description 发起人那一屏。
+         *
+         *     **不给分数。** AI 排序并解释，但最后那一下必须是人点的。
+         */
+        CandidatesOut: {
+            /** Still Need */
+            still_need: number;
+            /** Chosen */
+            chosen: components["schemas"]["CandidateOut"][];
+            /** Willing */
+            willing: components["schemas"]["CandidateOut"][];
+            /** Still Thinking */
+            still_thinking: number;
+            /** Formed Event Id */
+            formed_event_id?: string | null;
+            /** Space Id */
+            space_id?: string | null;
         };
         /**
          * ChatOut
@@ -1097,6 +1536,40 @@ export interface components {
             blocked: number;
             /** Early */
             early: number;
+        };
+        /**
+         * ComingUpOut
+         * @description 明天要出发的事。
+         *
+         *     ## 为什么是拉不是推
+         *
+         *     `lib/inbox.ts` 里已经有过同一个判断，照它：推送要设备权限、要服务端
+         *     订阅、要一套退订，而这里真正要解决的问题只是**"他不知道"**。
+         *     一个常驻的入口就够了。
+         *
+         *     等真的有人说"看到得太晚"再上推送——反过来先上推送，是为一个还没被
+         *     验证的问题付一整套代价。
+         */
+        ComingUpOut: {
+            /**
+             * Event Id
+             * Format: uuid
+             */
+            event_id: string;
+            /** Space Id */
+            space_id?: string | null;
+            /** Title */
+            title: string;
+            /** Starts At */
+            starts_at: string;
+            /** Where */
+            where?: string | null;
+            /** Bring */
+            bring?: string | null;
+            /** Change Note */
+            change_note?: string | null;
+            /** My State */
+            my_state?: string | null;
         };
         /** CompileRequest */
         CompileRequest: {
@@ -1158,6 +1631,11 @@ export interface components {
              * @default false
              */
             stash: boolean;
+            /**
+             * Reach
+             * @default campus
+             */
+            reach: string;
         };
         /** CreateOpportunityRequest */
         CreateOpportunityRequest: {
@@ -1187,12 +1665,64 @@ export interface components {
              */
             qualifications: string[];
         };
+        /** DayOfIn */
+        DayOfIn: {
+            /** State */
+            state: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * DayOfOut
+         * @description 到那天了这一屏。
+         *
+         *     PRD：首版不需要持续定位，只要地址入口和必要状态。一个为了"看谁到了"
+         *     而常开的定位权限，换来的信息量还不如一句"我到了"。
+         */
+        DayOfOut: {
+            /** Starts At */
+            starts_at?: string | null;
+            /**
+             * Active
+             * @default false
+             */
+            active: boolean;
+            /** Where */
+            where?: string | null;
+            /** Bring */
+            bring?: string | null;
+            /** Change Note */
+            change_note?: string | null;
+            /** Standings */
+            standings?: components["schemas"]["StandingOut"][];
+            /** My State */
+            my_state?: string | null;
+            /** Done By */
+            done_by?: string[];
+            /** Done Waiting On */
+            done_waiting_on?: string[];
+            /**
+             * All Done
+             * @default false
+             */
+            all_done: boolean;
+            /**
+             * I Marked Done
+             * @default false
+             */
+            i_marked_done: boolean;
+        };
         /** DecideRequest */
         DecideRequest: {
             /** Answer */
             answer: string;
             /** Condition */
             condition?: string | null;
+            /**
+             * Remind Me
+             * @default false
+             */
+            remind_me: boolean;
         };
         /** DraftOut */
         DraftOut: {
@@ -1283,7 +1813,27 @@ export interface components {
              */
             uploaded_by: string;
         };
-        /** FollowUpOut */
+        /**
+         * FollowUpOptionOut
+         * @description 一个可以直接点的答案。
+         *
+         *     `label` 是屏上那几个字，`value` 是点下去之后填进卡里的东西。两者分开
+         *     是因为「这周内」要变成一个真实的截止时刻，而屏上不该出现 ISO 时间戳。
+         */
+        FollowUpOptionOut: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * FollowUpOut
+         * @description 一个还没答的追问。
+         *
+         *     原先 `options` 是几个词，界面把它们当说明文字印出来——**用户读得到，
+         *     答不了**。一个答不了的追问比不问更糟：它明说了系统知道自己缺什么，
+         *     然后什么也不做。
+         */
         FollowUpOut: {
             /** Text */
             text: string;
@@ -1293,7 +1843,7 @@ export interface components {
              * Options
              * @default []
              */
-            options: string[];
+            options: components["schemas"]["FollowUpOptionOut"][];
         };
         /**
          * GapOut
@@ -1477,6 +2027,8 @@ export interface components {
             is_matchable: boolean;
             /** Action Kind */
             action_kind?: string | null;
+            /** @default campus */
+            reach: components["schemas"]["Reach"];
         };
         /**
          * InvitationOut
@@ -1599,12 +2151,26 @@ export interface components {
              * @default []
              */
             confirmed_by: string[];
-            reach?: components["schemas"]["Reach"] | null;
+            reach?: components["schemas"]["ItemReach"] | null;
             /** Source */
             source?: string | null;
             /** Notice */
             notice?: string | null;
         };
+        /**
+         * ItemReach
+         * @description 画布上一样东西谁能看见。
+         *
+         *     **名字里带 Item 是必须的**：需求那一侧另有一个「投给谁」（`intent.Reach`），
+         *     两个都叫 Reach 的时候契约里只活下来一个，而前端拿到的会是另一个概念的
+         *     取值——一个概念在 DB / API / 前端同名，反过来说就是两个概念不能同名。
+         *
+         *
+         *     只有两档，且默认是窄的那一档。档位多了就没人认真选，
+         *     而"发出去"这件事不该有一个随手滑过去的中间态。
+         * @enum {string}
+         */
+        ItemReach: "ours" | "outside";
         /** MessageOut */
         MessageOut: {
             /**
@@ -1675,6 +2241,10 @@ export interface components {
             with_others: string[];
             /** Counts As Done */
             counts_as_done: boolean;
+            /** Growth */
+            growth: string;
+            /** Growth Word */
+            growth_word: string;
             /** Space Id */
             space_id?: string | null;
         };
@@ -1798,6 +2368,86 @@ export interface components {
             /** Verified */
             verified: boolean;
         };
+        /** PlanIn */
+        PlanIn: {
+            /** Title */
+            title: string;
+            /** Starts At */
+            starts_at?: string | null;
+            /** Place */
+            place?: string | null;
+            /** Bring */
+            bring?: string | null;
+            /** Budget */
+            budget?: string | null;
+            /** Change Note */
+            change_note?: string | null;
+        };
+        /**
+         * PlanOut
+         * @description 行动确认卡。
+         *
+         *     PRD 称它是**最重要的中间转化节点**：从一句模糊的"有空一起"，
+         *     变成一项明确的共同承诺。
+         *
+         *     它和成局那道门不是一回事——那道门问「要不要和这几个人组队」，
+         *     这张卡问「我们要做的到底是什么」。
+         */
+        PlanOut: {
+            /** Exists */
+            exists: boolean;
+            /** Title */
+            title?: string | null;
+            /** Starts At */
+            starts_at?: string | null;
+            /** Place */
+            place?: string | null;
+            /** Bring */
+            bring?: string | null;
+            /** Budget */
+            budget?: string | null;
+            /** Change Note */
+            change_note?: string | null;
+            /** Nodded */
+            nodded?: string[];
+            /** Waiting On */
+            waiting_on?: string[];
+            /**
+             * Confirmed
+             * @default false
+             */
+            confirmed: boolean;
+            /**
+             * I Nodded
+             * @default false
+             */
+            i_nodded: boolean;
+            /** Missing */
+            missing?: string[];
+        };
+        /** PollOut */
+        PollOut: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Question */
+            question: string;
+            /** Tally */
+            tally: components["schemas"]["TallyOut"][];
+            /** My Choice */
+            my_choice?: number | null;
+            /** Waiting On */
+            waiting_on?: string[];
+            /** Leading */
+            leading?: string | null;
+            /**
+             * Settled
+             * @default false
+             */
+            settled: boolean;
+        };
         /**
          * PreviewOut
          * @description 「别人眼中的我」。
@@ -1811,6 +2461,43 @@ export interface components {
             };
             /** Withheld */
             withheld: string[];
+        };
+        /** ProfileIn */
+        ProfileIn: {
+            /** Display Name */
+            display_name?: string | null;
+            /** Skills */
+            skills?: string[];
+            /** Open To */
+            open_to?: string[];
+            /** Self Intro */
+            self_intro?: string | null;
+            /** Zone */
+            zone?: string | null;
+            /** Major */
+            major?: string | null;
+        };
+        /** ProfileOut */
+        ProfileOut: {
+            /** Display Name */
+            display_name: string;
+            /**
+             * Named Self
+             * @default true
+             */
+            named_self: boolean;
+            /** Skills */
+            skills: string[];
+            /** Open To */
+            open_to: string[];
+            /** Self Intro */
+            self_intro?: string | null;
+            /** Zone */
+            zone?: string | null;
+            /** Major */
+            major?: string | null;
+            /** Not Recognised */
+            not_recognised?: string[];
         };
         /**
          * ProgressOut
@@ -1838,13 +2525,13 @@ export interface components {
         };
         /**
          * Reach
-         * @description 一样东西谁能看见。
+         * @description 这条需求问谁。
          *
-         *     只有两档，且默认是窄的那一档。档位多了就没人认真选，
-         *     而"发出去"这件事不该有一个随手滑过去的中间态。
+         *     只有两档。「指定范围」（按组织、按院系）先不做：它要一套选择器，
+         *     而在还没有人抱怨"问的人太多"之前，那套选择器只是一个必须被填的表单。
          * @enum {string}
          */
-        Reach: "ours" | "outside";
+        Reach: "campus" | "known";
         /**
          * RecapOut
          * @description 这次一起做成了什么。
@@ -1894,6 +2581,18 @@ export interface components {
              */
             caution: string;
         };
+        /** RespondRequest */
+        RespondRequest: {
+            /** Willing */
+            willing: boolean;
+            /** Note */
+            note?: string | null;
+            /**
+             * Remind Me
+             * @default false
+             */
+            remind_me: boolean;
+        };
         /** ReviseIntentRequest */
         ReviseIntentRequest: {
             content: components["schemas"]["IntentContentIn"];
@@ -1910,7 +2609,7 @@ export interface components {
             state?: string | null;
             /** Assignee Id */
             assignee_id?: string | null;
-            reach?: components["schemas"]["Reach"] | null;
+            reach?: components["schemas"]["ItemReach"] | null;
         };
         /** SayRequest */
         SayRequest: {
@@ -1936,6 +2635,46 @@ export interface components {
             filled: number;
             /** Gap */
             gap: number;
+        };
+        /**
+         * SeedOut
+         * @description 信箱里的一颗种子。
+         *
+         *     **完整展示行动信息，有限展示发起人信息**（PRD 阶段三）：他要判断的是
+         *     这件事值不值得参与，不是这个人够不够格。
+         */
+        SeedOut: {
+            /**
+             * Intent Id
+             * Format: uuid
+             */
+            intent_id: string;
+            /** Goal */
+            goal: string;
+            /** Said */
+            said: string;
+            /** Needs */
+            needs: string[];
+            /** Offers */
+            offers: string[];
+            /** When */
+            when?: string | null;
+            /** Where */
+            where?: string | null;
+            /** Team Min */
+            team_min?: number | null;
+            /** Team Max */
+            team_max?: number | null;
+            /** From Name */
+            from_name: string;
+            /** Why */
+            why: string[];
+            /** State */
+            state: string;
+            /** My Note */
+            my_note?: string | null;
+            /** Space Id */
+            space_id?: string | null;
         };
         /**
          * ShownFieldOut
@@ -1982,6 +2721,30 @@ export interface components {
             progress: components["schemas"]["ProgressOut"];
             /** Summary */
             summary: string;
+            /** Members */
+            members: components["schemas"]["cofield__http__spaces__MemberOut"][];
+            /** Growth */
+            growth: string;
+            /** Growth Word */
+            growth_word: string;
+            /** Growth Why */
+            growth_why: string;
+        };
+        /** StandingOut */
+        StandingOut: {
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
+            /** Display Name */
+            display_name: string;
+            /** State */
+            state: string;
+            /** Word */
+            word: string;
+            /** Note */
+            note?: string | null;
         };
         /** StarterOut */
         StarterOut: {
@@ -2023,6 +2786,21 @@ export interface components {
             title: string;
             /** Grounded In */
             grounded_in: string[];
+        };
+        /**
+         * TallyOut
+         * @description 一个选项，和投它的人。
+         *
+         *     **票数实时可见。** 藏着计票会让人觉得系统在操纵，而这是一个五六个人
+         *     的组——他们本来就看得见彼此。
+         */
+        TallyOut: {
+            /** Label */
+            label: string;
+            /** Votes */
+            votes: number;
+            /** By */
+            by?: string[];
         };
         /** TeamMemberOut */
         TeamMemberOut: {
@@ -2134,6 +2912,26 @@ export interface components {
             expires_at: string;
         };
         /**
+         * VocabularyOut
+         * @description 界面上那些可点的词。
+         *
+         *     **不能在前端硬编码。** 词表是封闭的，加一项要同时想清楚抽取器认不认得
+         *     它的常见说法；两处各写一份，界面上就会出现一个匹配零个人的词。
+         */
+        VocabularyOut: {
+            /** Skills */
+            skills: string[];
+            /** Zones */
+            zones: string[];
+            /** Majors */
+            majors: string[];
+        };
+        /** VoteRequest */
+        VoteRequest: {
+            /** Choice */
+            choice: number;
+        };
+        /**
          * WaitingOut
          * @description 「等配队」那一屏。
          *
@@ -2157,6 +2955,35 @@ export interface components {
         WriteOwnIn: {
             /** Text */
             text: string;
+        };
+        /**
+         * MemberOut
+         * @description 上次一起做这件事的一个人。
+         */
+        cofield__http__memory__MemberOut: {
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
+            /** Display Name */
+            display_name: string;
+        };
+        /**
+         * MemberOut
+         * @description 这件事里的一个人。
+         *
+         *     名字不受逐项同意管——同意进一个小队本身就包含了同意在这里被指名，
+         *     否则"和谁一起做的"根本没法呈现。
+         */
+        cofield__http__spaces__MemberOut: {
+            /**
+             * Principal Id
+             * Format: uuid
+             */
+            principal_id: string;
+            /** Display Name */
+            display_name: string;
         };
     };
     responses: never;
@@ -2261,6 +3088,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 intent_id: string;
@@ -2294,6 +3122,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 intent_id: string;
@@ -2331,6 +3160,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 intent_id: string;
@@ -2364,6 +3194,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 intent_id: string;
@@ -2429,6 +3260,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2496,6 +3328,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -2527,6 +3360,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 organization_id: string;
@@ -2560,6 +3394,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 intent_id: string;
@@ -2697,6 +3532,7 @@ export interface operations {
             query?: never;
             header?: {
                 "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
             };
             path: {
                 intent_id: string;
@@ -3034,6 +3870,325 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpaceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_plan_api_spaces__space_id__plan_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_plan_api_spaces__space_id__plan_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_plan_api_spaces__space_id__plan_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_day_of_api_spaces__space_id__day_of_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayOfOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_day_of_api_spaces__space_id__day_of_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DayOfIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayOfOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_done_api_spaces__space_id__done_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayOfOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unmark_done_api_spaces__space_id__done_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DayOfOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_polls_api_spaces__space_id__polls_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vote_api_spaces__space_id__items__item_id__vote_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                item_id: string;
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PollOut"];
                 };
             };
             /** @description Validation Error */
@@ -3407,6 +4562,112 @@ export interface operations {
             };
         };
     };
+    again_api_events__event_id__again_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgainOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_them_again_api_events__event_id__again_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                event_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: number;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    coming_up_api_me_coming_up_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComingUpOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     my_records_api_me_facets_get: {
         parameters: {
             query?: never;
@@ -3526,6 +4787,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VisibilityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vocabulary_api_vocabulary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VocabularyOut"];
+                };
+            };
+        };
+    };
+    read_api_me_profile_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-principal-id"?: string | null;
+                "x-campus-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    write_api_me_profile_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-principal-id"?: string | null;
+                "x-campus-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    my_seeds_api_me_seeds_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeedOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    respond_api_seeds__intent_id__respond_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespondRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    candidates_api_intents__intent_id__candidates_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_api_intents__intent_id__candidates__who__choose_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                intent_id: string;
+                who: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CandidatesOut"];
                 };
             };
             /** @description Validation Error */

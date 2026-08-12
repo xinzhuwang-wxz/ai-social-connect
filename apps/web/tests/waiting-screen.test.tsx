@@ -106,6 +106,14 @@ function mockApi(opts: Options = {}): Call[] {
         }));
         return reply(intents[0]);
       }
+      if (url === `/api/intents/${INTENT_ID}:withdraw`) {
+        intents = intents.map((i) => ({
+          ...i,
+          state: "withdrawn",
+          is_matchable: false,
+        }));
+        return reply(intents[0]);
+      }
       if (url === `/api/intents/${INTENT_ID}:confirm`) {
         intents = intents.map((i) => ({ ...i, state: "active", is_matchable: true }));
         return reply(intents[0]);
@@ -149,7 +157,9 @@ describe("等待要有信息", () => {
     expect(box.getByText("剪辑")).toBeVisible();
     expect(box.getByText("12 个人要，3 个人会")).toBeVisible();
     expect(box.getByText("还缺 9 个")).toBeVisible();
-    expect(box.getByText("这里只有人数，没有名字。")).toBeVisible();
+    // 说的是"看不到是谁"以及"你会的话该干什么"——**不是**在跟用户解释
+    // 我们决定不显示名字。他要知道的不是我们定了什么，是他能做什么。
+    expect(box.getByText(/看不到是谁/)).toBeVisible();
     // 不缺的那样不该被标成缺口。
     expect(box.queryByText("还缺 -3 个")).toBeNull();
   });
@@ -288,5 +298,34 @@ describe("语言", () => {
     await screen.findByRole("heading", { name: /开始配队/ });
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/%|％|百分|匹配度|得分|评分|\d+\s*分(?!钟)/);
+  });
+});
+
+describe("这事不找了", () => {
+  it("一条发出去的需求收得回来", async () => {
+    // 在这之前它没有任何办法收回：会一直待在池子里，一轮一轮占着
+    // 会这一样的人，还不停给本人推他早就不想要的小队。
+    const calls = mockApi();
+    render(<WaitingScreen />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "这事不找了" }));
+
+    await waitFor(() =>
+      expect(
+        calls.some((c) => c.url.endsWith(":withdraw") && c.method === "POST"),
+      ).toBe(true),
+    );
+    expect(await screen.findByText("你还没有正在等配队的事。")).toBeVisible();
+  });
+
+  it("收回是一步完成的：不问为什么，不再确认一次", async () => {
+    // 和「我不参加」同一条。退出要和加入一样便宜，否则人会用"不理它"
+    // 来代替退出，而不理它的代价由其他等着的人付。
+    mockApi();
+    render(<WaitingScreen />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "这事不找了" }));
+
+    expect(screen.queryByText(/确定|真的要|为什么/)).toBeNull();
   });
 });

@@ -397,7 +397,7 @@ describe("五态", () => {
 
     expect(screen.getByRole("heading", { name: "说说话" })).toBeVisible();
     expect(screen.getByLabelText("说一句")).toBeVisible();
-    expect(screen.getByRole("button", { name: "让助手起个话头" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "推进一下" })).toBeEnabled();
   });
 
   it("加载：给骨架，不是转圈", () => {
@@ -413,7 +413,7 @@ describe("五态", () => {
 
     expect(await screen.findByText("还没人说话。")).toBeVisible();
     expect(screen.getByText(/第一句最难，之后就顺了/)).toBeVisible();
-    expect(screen.getByRole("button", { name: "让助手起个话头" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "推进一下" })).toBeEnabled();
     // 想自己先说也不用先找按钮，框就在手边。
     expect(screen.getByLabelText("说一句")).toBeVisible();
   });
@@ -442,10 +442,10 @@ describe("五态", () => {
     const calls = mockApi({ topics: [] });
     await opened();
 
-    await userEvent.click(screen.getByRole("button", { name: "让助手起个话头" }));
+    await userEvent.click(screen.getByRole("button", { name: "推进一下" }));
 
     // 空数组加 200 不是一次故障：平静地说一句，不弹红框。
-    expect(await screen.findByText(/助手这会儿起不了话头/)).toBeVisible();
+    expect(await screen.findByText(/助手这会儿说不出什么/)).toBeVisible();
     expect(screen.queryByRole("alert")).toBeNull();
 
     // 说过的话一句不少，还能接着说。
@@ -459,14 +459,15 @@ describe("五态", () => {
     });
   });
 
-  it("降级：起话头那一下挂了也不算事故，群聊照常", async () => {
+  it("降级：起话头那一下挂了时有人话的兜底，群聊照常", async () => {
     mockApi({ topicsStatus: 503 });
     await opened();
 
-    await userEvent.click(screen.getByRole("button", { name: "让助手起个话头" }));
+    await userEvent.click(screen.getByRole("button", { name: "推进一下" }));
 
-    expect(await screen.findByText(/助手这会儿起不了话头/)).toBeVisible();
-    expect(screen.queryByRole("alert")).toBeNull();
+    // 联系不上助手要告诉用户，不能静默——接口失败和「助手没东西说」是两件事。
+    expect(await screen.findByRole("alert")).toBeVisible();
+    // 群聊照常——一次助手失联不是整个聊天挂了。
     expect(screen.getByLabelText("说一句")).toBeEnabled();
     expect(screen.getByText(LATER.text)).toBeVisible();
   });
@@ -527,6 +528,62 @@ describe("语言", () => {
     ]) {
       expect(document.body.textContent ?? "").not.toContain(raw);
     }
+  });
+});
+
+/** 非空话题，用于测试「推进一下」触发后的状态。 */
+const RAISED_TOPIC: Message = {
+  id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  author_id: AGENT,
+  is_agent: true,
+  kind: "topic",
+  text: "周三晚上谁有空做剪辑？",
+  created_at: todayAt(10),
+  about_item_id: null,
+};
+
+describe("推进一下", () => {
+  it("不按按钮就没有助手话头——自动那条路真的没了", async () => {
+    // 断言的是「topics 端点一次都没被调到」，而不是「某条消息没出现」。
+    // 只要没有用户动作，后端就不该收到这个 POST。
+    const calls = mockApi();
+    render(<SpaceChat spaceId={SPACE_ID} />);
+    await screen.findByText("关于：作品署名怎么算");
+
+    expect(calls.some((c) => c.url.includes("chat:topics"))).toBe(false);
+  });
+
+  it("按了之后出现的话头里说得出它还不算数", async () => {
+    mockApi({ topics: [RAISED_TOPIC] });
+    await opened();
+
+    await userEvent.click(screen.getByRole("button", { name: "推进一下" }));
+
+    // 「聊出来的结果不算定下来」这句在 topicsRaised 面板里——
+    // 助手发了话头不等于事情定了，这一点必须说在屏上而不是藏在文档里。
+    expect(await screen.findByText(/聊出来的结果不算定下来/)).toBeVisible();
+  });
+
+  it("「继续聊聊」这条出路还在，助手的话头不该变成必答题", async () => {
+    mockApi({ topics: [RAISED_TOPIC] });
+    await opened();
+
+    await userEvent.click(screen.getByRole("button", { name: "推进一下" }));
+
+    // 等话头面板出现——这个按钮是 topicsRaised 之后才渲染的。
+    expect(await screen.findByRole("button", { name: "继续聊聊" })).toBeVisible();
+  });
+
+  it("接口失败时屏上有话说，不能静默", async () => {
+    mockApi({ topicsStatus: 503 });
+    await opened();
+
+    await userEvent.click(screen.getByRole("button", { name: "推进一下" }));
+
+    // 联系不上助手不是一次平静的降级——是用户做了一个动作但没有结果。
+    // 必须有话说，让他知道发生了什么，并有路可走（稍后重试）。
+    await waitFor(() => expect(screen.getByRole("alert")).toBeVisible());
+    expect((screen.getByRole("alert").textContent ?? "").length).toBeGreaterThan(0);
   });
 });
 

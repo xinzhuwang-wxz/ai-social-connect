@@ -80,7 +80,7 @@ export function TeamsScreen({ intentId }: { intentId: string }) {
           <button
             type="button"
             onClick={() => void load()}
-            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
+            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper"
           >
             再试一次
           </button>
@@ -110,14 +110,53 @@ export function TeamsScreen({ intentId }: { intentId: string }) {
     );
   }
 
+  // 三张卡上逐字相同的那几行。**只有全都有才算共有**——
+  // 少数几张卡才有的那条正是差别所在，不能被折叠掉。
+  const shared =
+    teams.length > 1
+      ? teams[0]!.left_to_humans.filter((line) =>
+          teams.every((t) => t.left_to_humans.some((o) => o.text === line.text)),
+        )
+      : [];
+  const sharedTexts = new Set(shared.map((l) => l.text));
+
   return (
     <Shell
       title="给你找的人"
       lead={`这是这一轮配给你的 ${teams.length} 个小队。选一个，或者都不选——不选不用解释。`}
     >
-      <div className="space-y-6">
-        {teams.map((team) => (
-          <TeamCard key={team.proposal_id} team={team} onRevised={() => void load()} />
+      {/* **每张卡都一样的东西，只说一次。**
+          「这几件事留给你们自己定」在三张卡上是逐字相同的六句话——
+          重复三遍的后果不是啰嗦，是把三张卡之间**真正的差别**淹掉了：
+          用户要比的是"这三组人有什么不同"，而屏上 80% 的字都一样。 */}
+      {shared.length > 0 && (
+        <details className="mb-6 rounded-[16px] border border-line bg-card px-5 py-4 shadow-[var(--shadow-card)]">
+          <summary className="cursor-pointer list-none text-[14px] font-medium">
+            这几件事哪一组都得你们自己定
+            <span className="ml-1.5 text-[13px] font-normal text-ink-faint">
+              {shared.length} 条 · 点开看
+            </span>
+          </summary>
+          <p className="mt-2 text-[13px] text-ink-faint">
+            这些是特意留给人的：有数据也不该由系统替你们定。
+          </p>
+          <ul className="mt-3 space-y-1.5">
+            {shared.map((line) => (
+              <Line key={line.text} line={line} />
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <div className="space-y-5">
+        {teams.map((team, index) => (
+          <TeamCard
+            key={team.proposal_id}
+            team={team}
+            index={index}
+            hide={sharedTexts}
+            onRevised={() => void load()}
+          />
         ))}
       </div>
     </Shell>
@@ -144,7 +183,18 @@ function Shell({
   );
 }
 
-function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
+function TeamCard({
+  team,
+  index,
+  hide,
+  onRevised,
+}: {
+  team: Team;
+  index: number;
+  /** 已经在页面顶上说过一次的那几条，卡里不再重复。 */
+  hide: Set<string>;
+  onRevised: () => void;
+}) {
   const [status, setStatus] = useState<GateStatus | null>(null);
   // 降级：读不到「还在等谁」不该挡住答复——挡住的代价是用户什么都做不了。
   const [statusDown, setStatusDown] = useState(false);
@@ -158,11 +208,11 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
     gateStatus(team.proposal_id).then(setStatus, () => setStatusDown(true));
   }, [team.proposal_id]);
 
-  async function answer(value: string, text?: string) {
+  async function answer(value: string, text?: string, remindMe = false) {
     setBusy(true);
     setFailed(false);
     try {
-      setStatus(await decide(team.proposal_id, value, text));
+      setStatus(await decide(team.proposal_id, value, text, remindMe));
       setStatusDown(false);
       setMine(value);
       setAsking(false);
@@ -184,34 +234,63 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
   return (
     <section
       aria-label={team.members.map((m) => m.display_name).join("、")}
-      className="rounded-[16px] border border-line bg-card p-5"
+      className="overflow-hidden rounded-[16px] border border-line bg-card shadow-[var(--shadow-card)]"
     >
-      <h2 className="text-[16px] font-medium">
-        {team.members.map((m) => m.display_name).join("、")}
-      </h2>
-      <p className="mt-1 text-[13px] text-ink-faint">
-        过了{whenPhrase(team.expires_at, new Date())}，这个小队就不留着了。
-      </p>
+      <div className="border-b border-line-soft bg-paper/60 px-5 py-4">
+        <div className="flex items-start gap-3">
+          <Faces names={team.members.map((m) => m.display_name)} />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[16px] font-medium">
+              {team.members.map((m) => m.display_name).join("、")}
+            </h2>
+            <p className="mt-0.5 text-[13px] text-ink-faint">
+              {/* 「过后天晚上 6 点 41就不留着了」连成一串没法读。
+                  时刻后面要有停顿——中文里那个停顿就是逗号。 */}
+              {team.members.length} 个人 · 过了
+              {whenPhrase(team.expires_at, new Date())}，这个小队就不留着了
+            </p>
+          </div>
+          {/* 序号让"这是第几个选择"一眼可见。三张卡长得像的时候，
+              人需要一个能指着说"我要第二个"的东西。 */}
+          <span
+            aria-hidden
+            className="shrink-0 rounded-full border border-line px-2 py-0.5 text-[12px] text-ink-faint"
+          >
+            {index + 1}
+          </span>
+        </div>
+      </div>
 
-      <Lines
-        title="为什么是这几个人"
-        lines={team.why_these_people}
-        empty="这一队没写出逐条的理由。没有理由的话，你可以先不选。"
-      />
-
-      {team.stability_note && (
-        <p className="mt-4 rounded-[8px] bg-paper px-3 py-2 text-[14px] text-settled">
-          {team.stability_note}
-        </p>
-      )}
-
-      {team.left_to_humans.length > 0 && (
+      <div className="px-5 py-4">
         <Lines
-          title="这几件事留给你们自己定"
-          note="这些是特意留给人的：有数据也不该由系统替你们定。"
-          lines={team.left_to_humans}
+          title="为什么是这几个人"
+          lines={team.why_these_people}
+          empty="这一队没写出逐条的理由。没有理由的话，你可以先不选。"
         />
-      )}
+
+        {team.stability_note && (
+          // **依据默认收起来。** 那句话是给能看懂的人准备的完整论证，
+          // 摊开来占六行，而绝大多数人只需要知道结论：没人想换组。
+          <details className="mt-4 rounded-[8px] border border-settled/25 bg-settled-soft px-3 py-2">
+            <summary className="cursor-pointer list-none text-[14px] text-settled">
+              没有人更想去别的组
+              <span className="ml-1.5 text-[13px] text-settled/70">看依据</span>
+            </summary>
+            <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
+              {team.stability_note}
+            </p>
+          </details>
+        )}
+
+        {team.left_to_humans.filter((l) => !hide.has(l.text)).length > 0 && (
+          // 只有一支队时什么都没被提到页面顶上，这里就还是原来那句话——
+          // 说"还额外留给你们几件事"会让人去找那个不存在的"基本的几件"。
+          <Lines
+            title={hide.size > 0 ? "这一组还额外留给你们几件事" : "这几件事留给你们自己定"}
+            note={hide.size > 0 ? undefined : "这些是特意留给人的：有数据也不该由系统替你们定。"}
+            lines={team.left_to_humans.filter((l) => !hide.has(l.text))}
+          />
+        )}
 
       {team.uncertainties.length > 0 && (
         <Lines
@@ -221,7 +300,9 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
         />
       )}
 
-      <div className="mt-5 border-t border-line pt-4">
+      </div>
+
+      <div className="border-t border-line-soft px-5 py-4">
         {answered ? (
           <Answered mine={mine} status={status} team={team} onRevised={onRevised} />
         ) : (
@@ -230,7 +311,7 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
               type="button"
               disabled={busy}
               onClick={() => void answer(ACCEPTED)}
-              className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+              className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
             >
               我加入
             </button>
@@ -251,6 +332,18 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
               className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
             >
               我不参加
+            </button>
+            {/* 第四种回应。**不是第四个承诺档位**——是拒绝这一次，
+                外加把这件事缺的那几样记进「我想参与的」，下次有人缺同样的
+                东西时他会出现在候选里。
+                和拒绝一样便宜：一步完成，不问为什么。 */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void answer(DECLINED, undefined, true)}
+              className="rounded-[12px] px-3 py-2 text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink disabled:opacity-35"
+            >
+              以后类似的叫我
             </button>
           </div>
         )}
@@ -275,7 +368,7 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
               type="button"
               disabled={busy || !condition.trim()}
               onClick={() => void answer(CONDITIONAL, condition.trim())}
-              className="mt-2 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+              className="mt-2 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-paper disabled:opacity-35"
             >
               就这么说
             </button>
@@ -295,6 +388,35 @@ function TeamCard({ team, onRevised }: { team: Team; onRevised: () => void }) {
         )}
       </div>
     </section>
+  );
+}
+
+/**
+ * 一组人的脸。
+ *
+ * 没有真实头像（这个产品里没有个人主页，也不该有），所以用名字末字
+ * 叠成一组圆片。它要做的只有一件事：**让"这是一组人"在一眼之内成立**，
+ * 而不是让人去读一行顿号分隔的名字。
+ */
+function Faces({ names }: { names: string[] }) {
+  const show = names.slice(0, 4);
+  return (
+    <div aria-hidden className="flex shrink-0 -space-x-2">
+      {show.map((name, i) => (
+        <span
+          key={name + i}
+          className="grid size-8 place-items-center rounded-full border-2 border-card bg-accent-soft text-[12px] font-medium text-accent"
+          style={{ zIndex: show.length - i }}
+        >
+          {name.slice(-1)}
+        </span>
+      ))}
+      {names.length > show.length && (
+        <span className="grid size-8 place-items-center rounded-full border-2 border-card bg-line-soft text-[11px] text-ink-soft">
+          +{names.length - show.length}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -323,7 +445,32 @@ function Answered({
   const verdict = status?.verdict;
 
   if (verdict === "open") {
-    return <p className="text-[15px]">都点头了，这件事成了。</p>;
+    // **成了之后必须有一扇门。** 原先这里只有一句话：发起人点完头、
+    // 所有人都点了头，然后这一屏就到此为止——他刚组起来的那件事没有入口。
+    // 项目空间在前，留下了什么在后：这时候要做的是开始做事，不是回顾。
+    return (
+      <div>
+        <p className="text-[15px]">都点头了，这件事成了。</p>
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          {status?.space_id && (
+            <a
+              href={`/spaces/${status.space_id}`}
+              className="text-[14px] text-accent underline underline-offset-4"
+            >
+              去这件事的地方
+            </a>
+          )}
+          {status?.formed_event_id && (
+            <a
+              href={`/events/${status.formed_event_id}/echo`}
+              className="text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
+            >
+              这次留下了什么
+            </a>
+          )}
+        </div>
+      </div>
+    );
   }
 
   if (verdict === "needs_revision") {

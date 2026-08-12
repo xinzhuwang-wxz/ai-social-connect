@@ -14,6 +14,9 @@ export type Intent = components["schemas"]["IntentOut"];
 export type CompileResult = components["schemas"]["CompileResponse"];
 export type FollowUp = components["schemas"]["FollowUpOut"];
 export type Conflict = components["schemas"]["ConflictOut"];
+export type Profile = components["schemas"]["ProfileOut"];
+export type ProfileIn = components["schemas"]["ProfileIn"];
+export type Vocabulary = components["schemas"]["VocabularyOut"];
 
 /** 后端返回的结构化错误。用来把冲突逐条显示出来，而不是弹一句"出错了"。 */
 export class ApiError extends Error {
@@ -79,10 +82,33 @@ export const api = {
     }),
 
   myIntents: () => request<Intent[]>("/api/me/intents"),
+
+  /** 界面上那些可点的词。**不在前端硬编码**——词表是封闭的，
+   *  两处各写一份，屏上迟早出现一个匹配零个人的词。 */
+  vocabulary: () => request<Vocabulary>("/api/vocabulary"),
+
+  profile: () => request<Profile>("/api/me/profile"),
+
+  /** 整份覆盖。「我不想再参与拍摄了」必须说得出口，
+   *  而只能追加的接口表达不了取消。 */
+  saveProfile: (body: ProfileIn) =>
+    request<Profile>("/api/me/profile", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
 };
 
-/** 把抽取结果转成可回传的内容。`uncertain_fields` 是抽取器的自述，不回传。 */
+/** 把抽取结果转成可回传的内容。`uncertain_fields` 是抽取器的自述，不回传。
+ *
+ *  时间窗要么两头都有要么整个没有：**"有起点没截止"不是一个时间窗**，
+ *  它是一个还没答的问题，而请求那一侧接不住半个。 */
 export function toContentIn(content: IntentContent): IntentContentIn {
-  const { uncertain_fields: _drop, ...rest } = content;
-  return rest;
+  const { uncertain_fields: _drop, time_window, ...rest } = content;
+  return {
+    ...rest,
+    time_window:
+      time_window?.deadline && time_window.earliest
+        ? { earliest: time_window.earliest, deadline: time_window.deadline }
+        : null,
+  };
 }

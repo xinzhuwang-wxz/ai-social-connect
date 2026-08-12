@@ -39,6 +39,7 @@ import {
   type Visibility,
 } from "@/lib/me";
 
+import { GrowthChip } from "./growth";
 import { countdown, whenPhrase } from "./waiting-screen";
 
 /**
@@ -63,6 +64,16 @@ const ITEM_WORDS: Record<string, string> = {
 };
 
 type Tab = "events" | "records" | "shown";
+
+/**
+ * 主按钮 / 次按钮。**最终形态是手机**，所以尺寸从拇指开始算：
+ * 主按钮 48px 高、窄屏独占一行，次按钮 44px。这一屏上的按钮多半是
+ * 「收回」——点错的代价是把还想给的东西收了回去，所以更不能挤。
+ */
+const PRIMARY =
+  "inline-flex min-h-[48px] w-full items-center justify-center rounded-[16px] bg-accent px-5 text-[15px] font-semibold text-paper active:opacity-80 disabled:opacity-35 sm:w-auto";
+const OUTLINE =
+  "inline-flex min-h-[44px] w-full items-center justify-center rounded-[16px] border border-line bg-card px-5 text-[15px] font-medium text-ink active:border-accent disabled:opacity-35 sm:w-auto";
 
 export function MyRecordScreen() {
   const [events, setEvents] = useState<MyEvent[] | null>(null);
@@ -125,16 +136,12 @@ export function MyRecordScreen() {
   if (events === null && records === null && shown === null) {
     return (
       <Shell>
-        <section role="alert" className="rounded-[16px] border border-line bg-card p-5">
-          <p className="text-[15px]">现在调不出你这边的东西。</p>
-          <p className="mt-1 text-[13px] text-ink-soft">
+        <section role="alert" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+          <p className="text-[16px]">现在调不出你这边的东西。</p>
+          <p className="mt-1 text-[14px] text-ink-soft">
             没连上的时候什么都不会被改动，你回来再看也不迟。
           </p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
-          >
+          <button type="button" onClick={() => void load()} className={`${PRIMARY} mt-4`}>
             再试一次
           </button>
         </section>
@@ -146,18 +153,27 @@ export function MyRecordScreen() {
   if (nothingYet(events, records, shown)) {
     return (
       <Shell>
-        <section className="rounded-[16px] border border-line bg-card p-6">
-          <p className="text-[16px]">你还没参加过什么，先说说想做点什么。</p>
-          <p className="mt-2 text-[14px] text-ink-soft">
-            做完一件事之后，这里会有你做过的事、系统记下的几句话、
-            以及你给出去过什么。每一样都收得回。
+        <section className="rounded-[16px] border border-line bg-card p-4 sm:p-6">
+          <p className="text-[18px] font-semibold">你的森林还是空的。</p>
+          <p className="mt-2 text-[15px] text-ink-soft">
+            做成一件事，这里就会多一株。它旁边还会有系统记下的几句话、
+            以及你给出去过什么——每一样都收得回。
           </p>
-          <a
-            href="/"
-            className="mt-5 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
-          >
+          <a href="/" className={`${PRIMARY} mt-5`}>
             说说想做点什么
           </a>
+          {/* 空态给两条路，不是一条。只给「去发起」的话，一个不想主动
+              开口的人在这一屏上还是无事可做。 */}
+          <p className="mt-3 text-[15px] text-ink-soft">
+            或者
+            <a
+              href="/me/about"
+              className="ml-1 inline-flex min-h-[44px] items-center text-accent underline underline-offset-4"
+            >
+              先写清楚你能做什么
+            </a>
+            ，让别人来找你。
+          </p>
         </section>
       </Shell>
     );
@@ -167,8 +183,20 @@ export function MyRecordScreen() {
 
   return (
     <Shell>
-      <div role="tablist" aria-label="这一页的三块" className="mb-6 flex flex-wrap gap-2">
-        <Tab id="events" now={tab} onPick={setTab} label="我参加过的" />
+      {/* 这一栏是「被找到」那一侧的入口。它必须在这一页最上面——
+          一个填过一次就再没打开过的人，改主意时得找得到地方改。 */}
+      <p className="mb-5 text-[15px] text-ink-soft">
+        <a
+          href="/me/about"
+          className="inline-flex min-h-[44px] items-center text-accent underline underline-offset-4"
+        >
+          我这边
+        </a>
+        ：写你能做什么、想参与什么。别人找得到你，靠的是这一页。
+      </p>
+
+      <div role="tablist" aria-label="这一页的三块" className="mb-5 flex flex-wrap gap-2">
+        <Tab id="events" now={tab} onPick={setTab} label="我的森林" />
         <Tab
           id="records"
           now={tab}
@@ -207,10 +235,13 @@ export function MyRecordScreen() {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-16">
-      <header className="mb-8">
-        <h1 className="text-[20px] font-semibold tracking-tight">只有你看得到</h1>
-        <p className="mt-1 text-[13px] text-ink-soft">
+    // 底部留出 pb-24：手机上固定底栏会压住最后一行。
+    <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-6 sm:px-5 sm:pb-16 sm:pt-16">
+      <header className="mb-6 sm:mb-8">
+        <h1 className="text-[28px] font-bold leading-tight tracking-tight sm:text-[30px]">
+          只有你看得到
+        </h1>
+        <p className="mt-1.5 text-[14px] text-ink-soft">
           这一页不给别人看。别人只看到你为某一次事情亲手同意给出去的那一小块。
         </p>
       </header>
@@ -241,12 +272,15 @@ function Tab({
       aria-selected={on}
       aria-controls={`panel-${id}`}
       onClick={() => onPick(id)}
-      className={`rounded-[12px] border px-3 py-1.5 text-[14px] ${
-        on ? "border-accent bg-accent-soft text-accent" : "border-line"
+      // 选中与否靠底色和字重分辨，不靠 hover——手机上没有 hover。
+      className={`inline-flex min-h-[44px] items-center rounded-full border px-4 text-[14px] ${
+        on
+          ? "border-accent bg-accent-soft font-medium text-accent"
+          : "border-line bg-card text-ink-soft"
       }`}
     >
       {label}
-      {badge && <span className="ml-1.5 text-[11px] text-pending">{badge}</span>}
+      {badge && <span className="ml-1.5 text-[12px] text-pending">{badge}</span>}
     </button>
   );
 }
@@ -262,16 +296,12 @@ function Panel({ id, children }: { id: Tab; children: ReactNode }) {
 /** 某一块单独调不出来时说什么。其余两块照常。 */
 function Down({ what, onRetry }: { what: string; onRetry: () => void }) {
   return (
-    <div className="rounded-[16px] border border-line bg-card p-5">
-      <p className="text-[15px]">现在调不出{what}。</p>
-      <p className="mt-1 text-[13px] text-ink-soft">
+    <div className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+      <p className="text-[16px]">现在调不出{what}。</p>
+      <p className="mt-1 text-[14px] text-ink-soft">
         这一页其余的照常能用，什么都没有被改动。
       </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-4 rounded-[12px] border border-line px-4 py-2 text-[14px]"
-      >
+      <button type="button" onClick={onRetry} className={`${OUTLINE} mt-4`}>
         再试一次
       </button>
     </div>
@@ -280,13 +310,10 @@ function Down({ what, onRetry }: { what: string; onRetry: () => void }) {
 
 function Empty({ text, cta }: { text: string; cta?: { href: string; label: string } }) {
   return (
-    <div className="rounded-[16px] border border-line bg-card p-5">
-      <p className="text-[15px]">{text}</p>
+    <div className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+      <p className="text-[16px]">{text}</p>
       {cta && (
-        <a
-          href={cta.href}
-          className="mt-4 inline-block rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
-        >
+        <a href={cta.href} className={`${PRIMARY} mt-4`}>
           {cta.label}
         </a>
       )}
@@ -307,7 +334,7 @@ function Events({
   if (events.length === 0) {
     return (
       <Empty
-        text="你还没参加过什么，先说说想做点什么。"
+        text="你的森林还是空的。做成一件事，这里就会多一株。"
         cta={{ href: "/", label: "说说想做点什么" }}
       />
     );
@@ -328,21 +355,27 @@ function EventCard({ event }: { event: MyEvent }) {
   return (
     <article
       aria-label={event.title}
-      className="rounded-[16px] border border-line bg-card p-5"
+      className="rounded-[16px] border border-line bg-card p-4 sm:p-5"
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[16px] font-medium">{event.title}</h2>
-        <span className="shrink-0 text-[11px] text-ink-faint">
+      {/* 窄屏上标题和时间换行排，不互相挤。 */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-[18px] font-semibold">{event.title}</h2>
+        <span className="shrink-0 text-[12px] text-ink-faint">
           {whenPhrase(event.formed_at, now)}开始
         </span>
       </div>
-      <p className="mt-1 text-[14px] text-ink-soft">{event.goal}</p>
+      {/* 一件事一株。**它说的是这件事长到哪一步了**，不是给这个人打的分——
+          所以旁边永远不出现数字（ADR 0009）。 */}
+      <div className="mt-2">
+        <GrowthChip stage={event.growth} word={event.growth_word} />
+      </div>
+      <p className="mt-1 text-[15px] text-ink-soft">{event.goal}</p>
       {event.with_others.length > 0 && (
-        <p className="mt-2 text-[13px] text-ink-soft">
+        <p className="mt-2 text-[14px] text-ink-soft">
           和{event.with_others.join("、")}一起
         </p>
       )}
-      <p className="mt-3 text-[13px]">
+      <p className="mt-3 text-[14px]">
         {/* 取消的事照样在这里——它是你真实的经历。但它不算做成的。
             两句话分开说，是因为把它藏起来和把它算成功劳一样都是假话。 */}
         {event.counts_as_done ? (
@@ -357,6 +390,17 @@ function EventCard({ event }: { event: MyEvent }) {
           <span className="text-pending">还在做</span>
         )}
       </p>
+
+      {/* 一株点得进去。
+          「做完了照这个再来一次」「上次留下了什么」「问上次那几个人」
+          全都在那一屏上，而在这扇门之前它们**一个入口都没有**——
+          森林里的一株只能看着。做成过一次的人正是最可能想再来一次的人。 */}
+      <a
+        href={`/events/${event.event_id}/echo`}
+        className="mt-3 inline-flex min-h-[44px] items-center text-[15px] text-accent underline underline-offset-4"
+      >
+        {event.counts_as_done ? "看看这次留下了什么" : "打开这件事"}
+      </a>
     </article>
   );
 }
@@ -447,10 +491,10 @@ function Group({
 }) {
   return (
     <section aria-label={title}>
-      <h2 className="text-[16px] font-medium">{title}</h2>
-      <p className="mt-0.5 text-[13px] text-ink-soft">{note}</p>
+      <h2 className="text-[20px] font-semibold">{title}</h2>
+      <p className="mt-0.5 text-[14px] text-ink-soft">{note}</p>
       {list.length === 0 ? (
-        empty && <p className="mt-3 text-[14px] text-ink-faint">{empty}</p>
+        empty && <p className="mt-3 text-[15px] text-ink-faint">{empty}</p>
       ) : (
         <ul className="mt-3 space-y-3">
           {list.map((record) => (
@@ -490,31 +534,33 @@ function RecordCard({
   return (
     <article
       aria-label={record.text}
-      className={`rounded-[16px] border p-5 ${
+      className={`rounded-[16px] border p-4 sm:p-5 ${
         guess ? "border-dashed border-draft bg-draft-soft" : "border-line bg-card"
       }`}
     >
       {record.drafted_by_agent && (
-        <p className="text-[11px] text-draft">这是我猜的，你看对不对</p>
+        <p className="text-[12px] text-draft">这是我猜的，你看对不对</p>
       )}
-      <p className="mt-1 text-[15px]">{record.text}</p>
+      <p className="mt-1 text-[16px]">{record.text}</p>
       <p className="mt-2 text-[13px] text-ink-faint">{sourceLine(record)}</p>
 
       {record.state === "confirmed" && (
-        <p className="mt-1 text-[13px] text-ink-soft">
+        <p className="mt-1 text-[14px] text-ink-soft">
           {record.in_use > 0
             ? `现在有 ${record.in_use} 处正在用这句话`
             : "现在没有地方在用这句话"}
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      {/* 「留下」和「删掉」在手机上竖排：并排放的两个反向决定，
+          拇指会替人做选择，而这一个是不可逆的。 */}
+      <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         {record.state === "draft" && (
           <button
             type="button"
             disabled={busy}
             onClick={() => void run(confirmRecord)}
-            className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+            className={PRIMARY}
           >
             对，是这样
           </button>
@@ -525,7 +571,7 @@ function RecordCard({
             type="button"
             disabled={busy}
             onClick={() => void run(revokeRecord)}
-            className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
+            className={OUTLINE}
           >
             {record.state === "draft" ? "删掉" : "收回"}
           </button>
@@ -536,7 +582,7 @@ function RecordCard({
       </div>
 
       {failed && (
-        <p role="alert" className="mt-3 text-[13px] text-clash">
+        <p role="alert" className="mt-3 text-[14px] text-clash">
           这一下没发出去，这句话还是原样。再点一次试试。
         </p>
       )}
@@ -612,29 +658,29 @@ function ShownCard({ row, onGone }: { row: Visibility; onGone: () => void }) {
   return (
     <article
       aria-label={row.for_what || "这一次"}
-      className="rounded-[16px] border border-line bg-card p-5"
+      className="rounded-[16px] border border-line bg-card p-4 sm:p-5"
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-[16px] font-medium">{row.for_what || "这一次"}</h2>
-        <span className="shrink-0 text-[11px] text-ink-faint">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-[18px] font-semibold">{row.for_what || "这一次"}</h2>
+        <span className="shrink-0 text-[12px] text-ink-faint">
           {countdown(row.expires_at, new Date())}自己失效
         </span>
       </div>
 
       {seen.length > 0 && (
-        <p className="mt-2 text-[14px]">他们看得到：{words(seen)}</p>
+        <p className="mt-2 text-[15px]">他们看得到：{words(seen)}</p>
       )}
       {hidden.length > 0 && (
-        <p className="mt-1 text-[14px] text-ink-soft">
+        <p className="mt-1 text-[15px] text-ink-soft">
           只拿来配队、他们看不到：{words(hidden)}
         </p>
       )}
       {row.shows_records.length > 0 && (
         <div className="mt-2">
-          <p className="text-[14px]">还带上你这几句话：</p>
+          <p className="text-[15px]">还带上你这几句话：</p>
           <ul className="mt-1 space-y-0.5">
             {row.shows_records.map((text) => (
-              <li key={text} className="text-[14px] text-ink-soft">
+              <li key={text} className="text-[15px] text-ink-soft">
                 {text}
               </li>
             ))}
@@ -647,13 +693,13 @@ function ShownCard({ row, onGone }: { row: Visibility; onGone: () => void }) {
         type="button"
         disabled={busy}
         onClick={() => void takeBack()}
-        className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+        className={`${PRIMARY} mt-4`}
       >
         收回
       </button>
 
       {failed && (
-        <p role="alert" className="mt-3 text-[13px] text-clash">
+        <p role="alert" className="mt-3 text-[14px] text-clash">
           这一下没发出去，他们还看得到。再点一次试试。
         </p>
       )}

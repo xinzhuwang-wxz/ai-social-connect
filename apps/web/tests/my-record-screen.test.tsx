@@ -35,6 +35,8 @@ const EVENTS: MyEvent[] = [
     left_at: null,
     with_others: ["苏晚", "陈牧"],
     counts_as_done: true,
+    growth: "bloom",
+    growth_word: "开花了",
   },
   {
     event_id: "88888888-8888-4888-8888-888888888888",
@@ -46,6 +48,9 @@ const EVENTS: MyEvent[] = [
     left_at: null,
     with_others: [],
     counts_as_done: false,
+    // 取消的那件事停在长叶：**它不因为结束了就开花**。
+    growth: "seedling",
+    growth_word: "长出幼苗",
   },
 ];
 
@@ -430,7 +435,7 @@ describe("五态", () => {
     render(<MyRecordScreen />);
 
     expect(
-      await screen.findByText("你还没参加过什么，先说说想做点什么。"),
+      await screen.findByText("你的森林还是空的。"),
     ).toBeVisible();
     expect(screen.getByRole("link", { name: "说说想做点什么" })).toHaveAttribute(
       "href",
@@ -505,7 +510,7 @@ describe("语言", () => {
     mockApi({ events: [], records: NOTHING, shown: [] });
     const { container } = render(<MyRecordScreen />);
 
-    await screen.findByText("你还没参加过什么，先说说想做点什么。");
+    await screen.findByText("你的森林还是空的。");
     expectNoDomainWords(container.textContent ?? "");
   });
 
@@ -545,3 +550,25 @@ function expectNoDomainWords(text: string) {
     expect(text).not.toContain(term);
   }
 }
+
+describe("我的森林", () => {
+  it("一件事一株，说的是它长到哪一步，不是给人打的分", async () => {
+    // 旁边永远不出现数字（ADR 0009）：世界观承担状态，
+    // 而分数是这个产品从一开始就不要的东西。
+    mockApi();
+    render(<MyRecordScreen />);
+
+    const one = await screen.findByRole("article", { name: "檐下" });
+    expect(within(one).getByText("开花了")).toBeVisible();
+    expect(one.textContent).not.toMatch(/%|％|分$/);
+  });
+
+  it("没做成的那件停在半路，不因为结束了就开花", async () => {
+    mockApi();
+    render(<MyRecordScreen />);
+
+    const one = await screen.findByRole("article", { name: "没做成的那次" });
+    expect(within(one).getByText("长出幼苗")).toBeVisible();
+    expect(within(one).getByText(/不算做成的/)).toBeVisible();
+  });
+});

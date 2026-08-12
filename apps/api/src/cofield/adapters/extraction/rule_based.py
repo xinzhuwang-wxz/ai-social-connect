@@ -17,6 +17,7 @@ from cofield.domain.model.intent import IntentContent, TeamSize, TimeWindow
 from cofield.domain.model.skills import normalise
 from cofield.domain.ports.intent_extractor import (
     Extraction,
+    FollowUpOption,
     FollowUpQuestion,
     IntentExtractor,
 )
@@ -62,15 +63,6 @@ class RuleIntentExtractor:
 
         deadline = _parse_deadline(text, now=now)
         window = TimeWindow(earliest=now, deadline=deadline) if deadline else None
-        if window is None:
-            uncertain.add("time_window")
-            follow_ups.append(
-                FollowUpQuestion(
-                    text="这件事什么时候要完成？",
-                    narrows="time_window",
-                    options=("这周内", "两周内", "这个月", "没有硬性截止"),
-                )
-            )
 
         offers, _ = _collect(text, _OFFER_PATTERNS)
         needs, needs_unclear = _collect(text, _NEED_PATTERNS)
@@ -81,13 +73,64 @@ class RuleIntentExtractor:
             # 标成"我猜的"让用户过目——他一眼就能看出漏了什么，
             # 而系统自己永远猜不出那半句该归到哪个词上。
             uncertain.add("needs")
+
+        size = _parse_team_size(text) or _infer_size(needs)
+        told_size = _parse_team_size(text) is not None
+        if size is not None and not told_size:
+            uncertain.add("team_size")
+        place = _parse_place(text)
+
+        # ## 追问按"能收窄多少"排，不按顺手排
+        #
+        # 缺的角色最能收窄可行集合（它直接进 SQL 精确过滤），人数次之
+        # （它是求解器的硬约束），时间和地点再次之。
+        #
+        # **上限仍然是两个。** 多问一个就是多一次把不确定推回给用户，
+        # 而 PRD 自己也写着"不要强制用户进行十几分钟的对话"。
+        if not needs or needs_unclear:
             follow_ups.append(
                 FollowUpQuestion(text="你最缺哪种人？", narrows="needs")
             )
-
-        size = _parse_team_size(text) or _infer_size(needs)
-        if size is not None and _parse_team_size(text) is None:
-            uncertain.add("team_size")
+        if not told_size:
+            follow_ups.append(
+                FollowUpQuestion(
+                    text="希望找几个人？",
+                    narrows="team_size",
+                    options=(
+                        FollowUpOption(label="就两个人", value="2-2"),
+                        FollowUpOption(label="三四个", value="3-4"),
+                        FollowUpOption(label="五六个", value="5-6"),
+                        FollowUpOption(label="人多点也行", value="3-8"),
+                    ),
+                )
+            )
+        if window is None:
+            uncertain.add("time_window")
+            follow_ups.append(
+                FollowUpQuestion(
+                    text="这件事什么时候要完成？",
+                    narrows="time_window",
+                    options=(
+                        FollowUpOption(label="这周内", value=_in_days(now, 7)),
+                        FollowUpOption(label="两周内", value=_in_days(now, 14)),
+                        FollowUpOption(label="这个月", value=_in_days(now, 30)),
+                        FollowUpOption(label="没有硬性截止", value=""),
+                    ),
+                )
+            )
+        if place is None:
+            follow_ups.append(
+                FollowUpQuestion(
+                    text="大概在哪边？",
+                    narrows="location_scope",
+                    options=(
+                        FollowUpOption(label="东校区", value="东校区"),
+                        FollowUpOption(label="西校区", value="西校区"),
+                        FollowUpOption(label="南校区", value="南校区"),
+                        FollowUpOption(label="都行", value=""),
+                    ),
+                )
+            )
 
         boundaries = tuple(
             sorted({v for k, v in _BOUNDARY_HINTS.items() if k in text})
@@ -98,7 +141,7 @@ class RuleIntentExtractor:
             offers=offers,
             needs=needs,
             time_window=window,
-            location_scope=_parse_place(text),
+            location_scope=place,
             team_size=size,
             boundaries=(),
             # 边界线索出现在原话里时，它们是"要留给真人决定的事"，
@@ -203,12 +246,34 @@ def _parse_place(text: str) -> str | None:
     return None
 
 
+def _in_days(now: datetime, days: int) -> str:
+    """「这周内」变成一个真实的截止时刻。
+
+    屏上不该出现 ISO 时间戳，卡里也不该出现「这周内」这种存不进
+    时间列的东西——所以标签和值从一开始就是两样。
+    """
+    return (now + timedelta(days=days)).isoformat()
+
+
 _CN_NUM = {"两": 2, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8}
 
 
 def _parse_team_size(text: str) -> TeamSize | None:
     if m := re.search(r"(\d+)\s*[-~到至]\s*(\d+)\s*(?:个)?人", text):
         return TeamSize(minimum=max(2, int(m.group(1))), maximum=int(m.group(2)))
+    # 「三四个人」「两三个」——中文里紧挨着的两个数字就是一个范围，
+    # 中间不写连接词。
+    #
+    # 少了这一条，「三四个人」被读成**四到四**：比用户说的更紧。而更紧的
+    # 约束正是杀死匹配的东西——真实走查里，一条"三四个人"的需求因此
+    # 要求恰好四人，校园里有人能接却凑不出队。
+    #
+    # 只认相邻的（三四、两三、四五）：不相邻的两个数字挨在一起通常不是
+    # 范围（「二五个人」不是一种说法），宁可不认也不要猜错。
+    if m := re.search(r"([两二三四五六七八])\s*([两二三四五六七八])\s*(?:个)?人?", text):
+        low, high = _CN_NUM[m.group(1)], _CN_NUM[m.group(2)]
+        if high == low + 1:
+            return TeamSize(minimum=max(2, low), maximum=high)
     if m := re.search(r"([\d两二三四五六七八])\s*(?:个)?人(?:的)?(?:团队|队伍|小组)?", text):
         raw = m.group(1)
         n = _CN_NUM.get(raw) or int(raw)

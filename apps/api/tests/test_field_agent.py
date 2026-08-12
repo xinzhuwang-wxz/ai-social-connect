@@ -408,3 +408,86 @@ def test_it_gives_at_most_a_handful(engine: Engine) -> None:
         suggestions = agent.suggest_next_steps(token, now=NOW)
 
     assert len(suggestions) <= 3
+
+
+# --- 提议投票 ---
+
+
+def test_it_proposes_a_vote_only_about_something_already_undecided(
+    engine: Engine,
+) -> None:
+    """凭空造一次投票和凭空造一个话题一样，会很快被所有人忽略。"""
+    space_id = open_space(engine)
+    thing = uuid4()
+    with field_agent_on(engine, space_id) as (agent, _):
+        token = agent.issue(
+            purpose=DraftKind.OPEN_QUESTION, powers=(Power.ASK,), now=NOW
+        )
+        made = agent.propose_poll(
+            token,
+            about=(thing, "周六去东湖还是磨山"),
+            options=["东湖", "磨山"],
+            already_asked=frozenset(),
+            now=NOW,
+        )
+
+    assert made is not None
+    assert made.kind == "poll"
+    # 看得到依据。看不到依据的建议，"人类决定"就只是点一下按钮。
+    assert "东湖" in made.grounded_in
+
+
+def test_it_does_not_propose_the_same_vote_twice(engine: Engine) -> None:
+    """同一件事问第二遍最伤——它说明这个助手没在听。"""
+    space_id = open_space(engine)
+    thing = uuid4()
+    with field_agent_on(engine, space_id) as (agent, _):
+        token = agent.issue(
+            purpose=DraftKind.OPEN_QUESTION, powers=(Power.ASK,), now=NOW
+        )
+        assert (
+            agent.propose_poll(
+                token,
+                about=(thing, "去哪"),
+                options=["东湖", "磨山"],
+                already_asked=frozenset({thing}),
+                now=NOW,
+            )
+            is None
+        )
+
+
+def test_one_option_is_not_a_vote(engine: Engine) -> None:
+    """一个选项的投票不是投票，是通知。"""
+    space_id = open_space(engine)
+    with field_agent_on(engine, space_id) as (agent, _):
+        token = agent.issue(
+            purpose=DraftKind.OPEN_QUESTION, powers=(Power.ASK,), now=NOW
+        )
+        assert (
+            agent.propose_poll(
+                token,
+                about=(uuid4(), "去哪"),
+                options=["东湖"],
+                already_asked=frozenset(),
+                now=NOW,
+            )
+            is None
+        )
+
+
+def test_proposing_a_vote_needs_the_asking_power(engine: Engine) -> None:
+    """能力令牌管着它，和别的动作一样。"""
+    space_id = open_space(engine)
+    with field_agent_on(engine, space_id) as (agent, _):
+        token = agent.issue(
+            purpose=DraftKind.NEGOTIATION_REPLY, powers=(Power.DRAFT,), now=NOW
+        )
+        with pytest.raises(CapabilityRefused):
+            agent.propose_poll(
+                token,
+                about=(uuid4(), "去哪"),
+                options=["东湖", "磨山"],
+                already_asked=frozenset(),
+                now=NOW,
+            )

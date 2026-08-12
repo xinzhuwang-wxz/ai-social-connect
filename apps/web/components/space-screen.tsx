@@ -26,6 +26,11 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { Growth, GrowthPlant, GrowthTrail } from "@/components/growth";
+import { DayOfCard } from "@/components/day-of";
+import { SpaceChat } from "@/components/space-chat";
+import { PlanCard } from "@/components/plan-card";
+import { Polls } from "@/components/poll-card";
 import { currentPrincipal } from "@/lib/session";
 import {
   OURS,
@@ -82,6 +87,34 @@ const REACH_WORDS: Record<string, string> = {
   [OUTSIDE]: "外面也看得见",
 };
 
+/**
+ * 三种按钮，一处写死。
+ *
+ * 这是一个手机产品，所以高度不是审美问题：规范给的按钮高度是 44–52px，
+ * 主操作取上半段（48），其余取下限（44）。之前满屏的 `py-2` 折算下来约 36px，
+ * 在真手上会反复点空，而点空三次的人就走了。
+ *
+ * `inline-flex items-center` 而不是靠 `py-` 撑高：min-h 只保证盒子够大，
+ * 文字要自己居中才不会贴在上边缘。
+ */
+const PRIMARY =
+  "inline-flex min-h-[48px] items-center justify-center rounded-[16px] bg-accent px-5 text-[15px] font-medium text-paper disabled:opacity-35";
+const SECONDARY =
+  "inline-flex min-h-[44px] items-center justify-center rounded-[16px] border border-line bg-card px-4 text-[15px] disabled:opacity-35";
+/** 只有文字的那一类。**下划线常在**——手机上没有 hover，靠悬停才显形的
+ *  按钮在这里等于不存在。 */
+const QUIET =
+  "inline-flex min-h-[44px] items-center text-[15px] text-ink-soft underline underline-offset-4 hover:text-ink active:text-ink";
+
+/**
+ * 输入框。
+ *
+ * **16px 不是审美，是功能**：iOS Safari 对小于 16px 的输入框会在聚焦时
+ * 自动放大整页，而且缩不回去——用户会以为页面坏了。
+ */
+const FIELD =
+  "mt-1 block min-h-[48px] w-full rounded-[10px] border border-line bg-paper px-3 py-3 text-[16px] outline-none placeholder:text-ink-faint focus:border-accent";
+
 export function SpaceScreen({ spaceId }: { spaceId: string }) {
   const [space, setSpace] = useState<Space | null>(null);
   const [kinds, setKinds] = useState<ItemKind[] | null>(null);
@@ -131,16 +164,15 @@ export function SpaceScreen({ spaceId }: { spaceId: string }) {
   if (failed) {
     return (
       <Shell title="这件事">
-        <section role="alert" className="rounded-[16px] border border-line bg-card p-5">
-          <p className="text-[15px]">现在打不开这个地方。</p>
-          <p className="mt-1 text-[13px] text-ink-soft">
+        <section
+          role="alert"
+          className="rounded-[16px] border border-line bg-card p-4 sm:p-5"
+        >
+          <p className="text-[16px]">现在打不开这个地方。</p>
+          <p className="mt-1 text-[14px] text-ink-soft">
             没连上的时候什么都不会被改动，你回来再看也不迟。
           </p>
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="mt-4 rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white"
-          >
+          <button type="button" onClick={() => void load()} className={PRIMARY + " mt-4"}>
             再试一次
           </button>
         </section>
@@ -162,6 +194,10 @@ export function SpaceScreen({ spaceId }: { spaceId: string }) {
 
   const me = currentPrincipal();
   const { stuck, gates, rest } = board(space);
+  // 等谁点头要指名道姓。"还差 2 个人确认"催不动任何人。
+  const nameOf = new Map(
+    space.members.map((m) => [m.principal_id, m.display_name] as const),
+  );
   const fresh = justStarted(space);
   const byKey = new Map((kinds ?? []).map((k) => [k.key, k]));
   const live = (tips ?? []).filter((t) => !waved.includes(t.title));
@@ -179,8 +215,68 @@ export function SpaceScreen({ spaceId }: { spaceId: string }) {
 
   return (
     <Shell title={space.title} lead={space.summary}>
-      <DoneBar progress={space.progress} />
+      {/* **状态看板。** PRD 要求房间顶部持续展示：目标、成员、已确认、
+          未确认、进度、下一步。散在下面几栏里等于没有——一个刚点进来的人
+          要在一眼之内知道"这件事现在到哪了、下一步是什么"。
 
+          手机上它只准占三行：**一株植物、一行状态、一行统计**。
+          PRD 原话是「植物只作为 Progress Visualization，不能挤占聊天面积」——
+          而一个占满第一屏的看板，等于把下面每一件要做的事都推到了折叠线以下。
+          压缩掉的是排版，不是信息：成员、四个数、七步那一条一个没少。 */}
+      <section
+        aria-label="这件事现在到哪了"
+        className="mb-4 rounded-[16px] border border-line bg-card p-4 shadow-[var(--shadow-card)] sm:mb-6 sm:p-5"
+      >
+        <div className="flex items-center gap-3 sm:gap-4">
+          <GrowthPlant stage={space.growth} />
+          <div className="min-w-0 flex-1">
+            <Growth
+              stage={space.growth}
+              word={space.growth_word}
+              why={space.growth_why}
+            />
+            {/* 成员挪进这一列，不再自己占一行。 */}
+            {space.members.length > 0 && (
+              <p className="mt-1 text-[13px] text-ink-soft">
+                这件事里有 {space.members.map((m) => m.display_name).join("、")}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <GrowthTrail stage={space.growth} />
+        </div>
+
+        {/* 四个数排成一行。原先的 2×2 格子在手机上要吃掉四行文字，
+            而这四个数加起来不到二十个字。 */}
+        <div className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[13px] sm:text-[14px]">
+          <Stat label="要做的事" value={`${space.progress.total} 件`} />
+          <Stat label="做完了" value={`${space.progress.done} 件`} />
+          <Stat
+            label="还没定的"
+            value={space.open_gates.length > 0 ? `${space.open_gates.length} 件` : "没有"}
+            tone={space.open_gates.length > 0 ? "text-pending" : undefined}
+          />
+          <Stat
+            label="卡住的"
+            value={stuck.length > 0 ? `${stuck.length} 件` : "没有"}
+            tone={stuck.length > 0 ? "text-clash" : undefined}
+          />
+        </div>
+      </section>
+
+      <div className="mb-4 space-y-4 sm:mb-6">
+        <PlanCard spaceId={spaceId} names={nameOf} me={me} onChanged={refresh} />
+        {/* 到那天了。**行动前一天才出现**——一个常驻的"我出发了"在事情
+            还没定下来的时候只是噪音，而噪音会让人学会忽略这一整块。 */}
+        <DayOfCard spaceId={spaceId} names={nameOf} onChanged={refresh} />
+        {/* 要选一个。放在确认卡下面：先把选择收敛掉，再去定这次怎么办。 */}
+        <Polls spaceId={spaceId} onChanged={refresh} />
+      </div>
+
+      {/* 进度那一条已经在看板里说过了（要做的事 / 做完了）。
+          同一件事说两遍，第二遍就成了装饰。 */}
       <AgentSwitch
         spaceId={spaceId}
         on={space.agent_enabled}
@@ -192,7 +288,7 @@ export function SpaceScreen({ spaceId }: { spaceId: string }) {
 
       {fresh && <FirstStep space={space} />}
 
-      <div className="mt-8 space-y-8">
+      <div className="mt-6 space-y-6 sm:mt-8 sm:space-y-8">
         <Group
           title="卡在哪"
           note="没人认领，或者过了说好的时间。一件事没有名字挂在上面，它就不会自己往前走。"
@@ -219,6 +315,11 @@ export function SpaceScreen({ spaceId }: { spaceId: string }) {
         >
           {rest.map(card)}
         </Group>
+
+        {/* **真人对话区。** PRD 把它列为行动房间的组成之一，而它一直
+            建着却没挂上——组件写完了、测试也有，只是没有任何一屏渲染它。
+            "建好了却没有入口"和没建是一回事。 */}
+        <SpaceChat spaceId={spaceId} />
 
         <Group
           title="等你过目"
@@ -260,10 +361,14 @@ function Shell({
   children: ReactNode;
 }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-5 py-10 sm:py-16">
-      <header className="mb-6">
-        <h1 className="text-[20px] font-semibold tracking-tight">{title}</h1>
-        {lead && <p className="mt-1 text-[13px] text-ink-soft">{lead}</p>}
+    // **底部要留出固定底栏的位置。** 少了 pb-24，这一屏的最后一个按钮
+    // 会被底部标签栏压在下面——而最后一个按钮往往正是"放一条东西"。
+    <main className="mx-auto w-full max-w-2xl px-4 pt-6 pb-24 sm:px-5 sm:pt-12">
+      <header className="mb-4 sm:mb-6">
+        <h1 className="text-[22px] font-semibold tracking-tight sm:text-[24px]">
+          {title}
+        </h1>
+        {lead && <p className="mt-1 text-[14px] text-ink-soft">{lead}</p>}
       </header>
       {children}
     </main>
@@ -275,24 +380,24 @@ function Shell({
  *
  * 一格一件，不是一个百分比——这个产品不做总分。助手起草而没人认领的那些
  * 既不占格子也不填格子，所以它多写几条并不会把这条变短。
+ *
+ * 标签和数字并排、不换行：竖着摞在一起，四个数就要占四行，
+ * 而这一块只被允许占一行。
  */
-function DoneBar({ progress }: { progress: Progress }) {
-  if (progress.total === 0) return null;
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
   return (
-    <div
-      role="img"
-      aria-label={`一共 ${progress.total} 件，做完 ${progress.done} 件`}
-      className="flex gap-1"
-    >
-      {[...Array(progress.total)].map((_, i) => (
-        <span
-          key={i}
-          className={`h-1.5 min-w-0 flex-1 rounded-full ${
-            i < progress.done ? "bg-settled" : "bg-line"
-          }`}
-        />
-      ))}
-    </div>
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-ink-faint">{label}</span>
+      <span className={"font-medium " + (tone ?? "")}>{value}</span>
+    </span>
   );
 }
 
@@ -334,8 +439,12 @@ function AgentSwitch({
         aria-checked={on}
         disabled={busy}
         onClick={() => void flip()}
-        className={`rounded-[12px] border px-3 py-1.5 text-[14px] disabled:opacity-35 ${
-          on ? "border-accent bg-accent-soft text-accent" : "border-line text-ink-soft"
+        // 开着关着靠底色和边框分，不靠 hover：手机上没有 hover，
+        // 一个只在悬停时才显形的状态等于没有状态。
+        className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-4 text-[15px] disabled:opacity-35 ${
+          on
+            ? "border-accent bg-accent-soft font-medium text-accent"
+            : "border-line text-ink-soft"
         }`}
       >
         助手帮我看着
@@ -363,7 +472,7 @@ function FirstStep({ space }: { space: Space }) {
   return (
     <section
       aria-label="从哪开始"
-      className="mt-6 rounded-[16px] border border-line bg-card p-5"
+      className="mt-4 rounded-[16px] border border-line bg-card p-4 sm:mt-6 sm:p-5"
     >
       {first ? (
         <>
@@ -397,7 +506,7 @@ function Group({
 }) {
   return (
     <section aria-label={title}>
-      <h2 className="text-[16px] font-medium">{title}</h2>
+      <h2 className="text-[18px] font-semibold">{title}</h2>
       {note && <p className="mt-0.5 text-[13px] text-ink-soft">{note}</p>}
       {children.length === 0 ? (
         <p className="mt-2 text-[14px] text-ink-faint">{empty}</p>
@@ -461,19 +570,19 @@ function Card({
   return (
     <article
       aria-label={item.title}
-      className={`rounded-[16px] border p-5 ${
+      className={`rounded-[16px] border p-4 sm:p-5 ${
         guess ? "border-dashed border-draft bg-draft-soft" : "border-line bg-card"
       }`}
     >
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-[16px] font-medium">{item.title}</h3>
-        <span className="shrink-0 text-[11px] text-ink-faint">{item.label}</span>
+        <span className="shrink-0 text-[12px] text-ink-faint">{item.label}</span>
       </div>
 
       {item.body && <p className="mt-1 text-[14px] text-ink-soft">{item.body}</p>}
 
       {item.drafted_by_agent && (
-        <p className="mt-1 text-[11px] text-draft">
+        <p className="mt-1 text-[12px] text-draft">
           {guess ? "还没人认下这条，它不算数" : "助手起草，有人认下了"}
         </p>
       )}
@@ -493,18 +602,20 @@ function Card({
       {item.notice && <p className="mt-2 text-[14px] text-pending">{item.notice}</p>}
 
       {!guess && (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        // 按钮之间 gap-2：一行要塞得下两个 44px 高的按钮，
+        // gap-3 会把第二个挤到下一行，于是同一张卡忽然长出一截。
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {nod === "mine" && (
             <button
               type="button"
               disabled={busy}
               onClick={() => void run(() => confirmItem(spaceId, item.id))}
-              className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+              className={PRIMARY}
             >
               我点头
             </button>
           )}
-          {nod === "done" && <span className="text-[14px] text-settled">你点过头了</span>}
+          {nod === "done" && <span className="text-[15px] text-settled">你点过头了</span>}
 
           {kind?.counts_toward_progress &&
             (item.assignee_id === me ? (
@@ -514,7 +625,7 @@ function Card({
                 onClick={() =>
                   void run(() => reviseItem(spaceId, item.id, { assignee_id: null }))
                 }
-                className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
+                className={SECONDARY}
               >
                 放回去
               </button>
@@ -526,7 +637,7 @@ function Card({
                   onClick={() =>
                     void run(() => reviseItem(spaceId, item.id, { assignee_id: me }))
                   }
-                  className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+                  className={PRIMARY}
                 >
                   我来做
                 </button>
@@ -541,7 +652,7 @@ function Card({
                   type="button"
                   disabled={busy}
                   onClick={() => void run(() => reviseItem(spaceId, item.id, { state: to }))}
-                  className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
+                  className={SECONDARY}
                 >
                   {MOVE_WORDS[to]}
                 </button>
@@ -555,7 +666,7 @@ function Card({
               type="button"
               disabled={busy}
               onClick={() => void run(() => reviseItem(spaceId, item.id, { reach: OURS }))}
-              className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
+              className={SECONDARY}
             >
               收回来，只给我们看
             </button>
@@ -570,7 +681,7 @@ function Card({
                   () => setNeedsNods(true),
                 )
               }
-              className="rounded-[12px] border border-line px-4 py-2 text-[14px] disabled:opacity-35"
+              className={SECONDARY}
             >
               放到外面去
             </button>
@@ -623,7 +734,7 @@ function AddItem({
 
   if (kinds === null || usable.length === 0) {
     return (
-      <p className="mt-8 text-[13px] text-ink-faint">
+      <p className="mt-6 text-[13px] text-ink-faint sm:mt-8">
         现在放不了新东西。上面这些照常能用。
       </p>
     );
@@ -664,7 +775,7 @@ function AddItem({
       <button
         type="button"
         onClick={() => setShowing(true)}
-        className="mt-8 rounded-[12px] border border-line px-4 py-2 text-[14px]"
+        className={SECONDARY + " mt-6 w-full sm:mt-8 sm:w-auto"}
       >
         放一条东西
       </button>
@@ -674,7 +785,7 @@ function AddItem({
   return (
     <section
       aria-label="放一条东西"
-      className="mt-8 rounded-[16px] border border-line bg-card p-5"
+      className="mt-6 rounded-[16px] border border-line bg-card p-4 sm:mt-8 sm:p-5"
     >
       <div role="radiogroup" aria-label="放什么" className="flex flex-wrap gap-2">
         {usable.map((k) => (
@@ -684,9 +795,9 @@ function AddItem({
             role="radio"
             aria-checked={k.key === kind.key}
             onClick={() => setPicked(k.key)}
-            className={`rounded-[12px] border px-3 py-1.5 text-[14px] ${
+            className={`inline-flex min-h-[44px] items-center rounded-full border px-4 text-[15px] ${
               k.key === kind.key
-                ? "border-accent bg-accent-soft text-accent"
+                ? "border-accent bg-accent-soft font-medium text-accent"
                 : "border-line"
             }`}
           >
@@ -702,7 +813,7 @@ function AddItem({
           onChange={(e) => setTitle(e.target.value)}
           aria-label="一句话说清是什么"
           placeholder="比如：周三之前把脚本写完"
-          className="mt-1 w-full rounded-[8px] border border-line p-3 text-[15px] outline-none placeholder:text-ink-faint focus:border-accent"
+          className={FIELD}
         />
       </label>
 
@@ -713,7 +824,7 @@ function AddItem({
           onChange={(e) => setBody(e.target.value)}
           rows={2}
           aria-label="要多说两句的话"
-          className="mt-1 w-full resize-none rounded-[8px] border border-line p-3 text-[15px] outline-none focus:border-accent"
+          className={FIELD + " resize-none"}
         />
       </label>
 
@@ -725,7 +836,7 @@ function AddItem({
             onChange={(e) => setSource(e.target.value)}
             aria-label="从哪来的"
             placeholder="比如：苏晚周二拍的那段"
-            className="mt-1 w-full rounded-[8px] border border-line p-3 text-[15px] outline-none placeholder:text-ink-faint focus:border-accent"
+            className={FIELD}
           />
         </label>
       )}
@@ -739,9 +850,9 @@ function AddItem({
               role="radio"
               aria-checked={reach === value}
               onClick={() => setReach(value)}
-              className={`rounded-[12px] border px-3 py-1.5 text-[14px] ${
+              className={`inline-flex min-h-[44px] items-center rounded-full border px-4 text-[15px] ${
                 reach === value
-                  ? "border-accent bg-accent-soft text-accent"
+                  ? "border-accent bg-accent-soft font-medium text-accent"
                   : "border-line"
               }`}
             >
@@ -756,15 +867,11 @@ function AddItem({
           type="button"
           disabled={busy || !ready}
           onClick={() => void put()}
-          className="rounded-[12px] bg-accent px-4 py-2 text-[14px] font-medium text-white disabled:opacity-35"
+          className={PRIMARY + " w-full sm:w-auto"}
         >
           放上去
         </button>
-        <button
-          type="button"
-          onClick={() => setShowing(false)}
-          className="text-[14px] text-ink-soft underline underline-offset-4 hover:text-ink"
-        >
+        <button type="button" onClick={() => setShowing(false)} className={QUIET}>
           先不放了
         </button>
       </div>
@@ -799,7 +906,7 @@ function Assistant({
   return (
     <aside
       aria-label="助手写的"
-      className="mt-8 rounded-[16px] border border-dashed border-draft bg-draft-soft p-4 lg:fixed lg:right-6 lg:bottom-6 lg:mt-0 lg:w-72"
+      className="mt-6 rounded-[16px] border border-dashed border-draft bg-draft-soft p-4 sm:mt-8 lg:fixed lg:right-6 lg:bottom-6 lg:mt-0 lg:w-72"
     >
       <p className="text-[13px] text-draft">这几条我先写着，你看要不要。</p>
       <ul className="mt-2 space-y-3">
@@ -856,21 +963,18 @@ function Tip({
           我是看着这个写的：{tip.grounded_in.join("、")}
         </p>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-3">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={busy}
           onClick={() => void take()}
-          className="rounded-[12px] bg-accent px-3 py-1.5 text-[14px] font-medium text-white disabled:opacity-35"
+          className={PRIMARY}
         >
           放进来
         </button>
-        {/* 一步说完，不问为什么。要问理由的拒绝就是在用摩擦力换同意率。 */}
-        <button
-          type="button"
-          onClick={onWaved}
-          className="rounded-[12px] border border-line px-3 py-1.5 text-[14px]"
-        >
+        {/* 一步说完，不问为什么。要问理由的拒绝就是在用摩擦力换同意率。
+            所以它和「放进来」一样大——**难点的拒绝就是变相的不给拒绝**。 */}
+        <button type="button" onClick={onWaved} className={SECONDARY}>
           不用了
         </button>
       </div>

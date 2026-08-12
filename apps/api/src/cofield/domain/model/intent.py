@@ -120,6 +120,20 @@ class IntentContent:
         return tuple(found)
 
 
+class Reach(StrEnum):
+    """这条需求问谁。
+
+    只有两档。「指定范围」（按组织、按院系）先不做：它要一套选择器，
+    而在还没有人抱怨"问的人太多"之前，那套选择器只是一个必须被填的表单。
+    """
+
+    #: 全校。默认——冷启动时缩小范围等于没有匹配。
+    CAMPUS = "campus"
+    #: 一起做成过事的人。**不是好友列表**，也不是平台觉得你们熟：
+    #: 不变量 7 说关系图谱是共同事件的可重建投影，不是主观判定。
+    KNOWN = "known"
+
+
 @dataclass(frozen=True, slots=True)
 class IntentSignal:
     """一条意图。
@@ -135,6 +149,10 @@ class IntentSignal:
     content: IntentContent
     created_at: datetime
     expires_at: datetime | None = None
+    #: 这条需求问谁。**和逐项授权是两个轴**：授权决定这次露出什么，
+    #: 这一项决定这次问谁。两者混成一件事就会得到两套互相打架的
+    #: 可见性规则，而那时候用户再也搞不清自己的东西谁能看到。
+    reach: Reach = Reach.CAMPUS
     #: 属于哪个行动类别。撮合窗口长度由它决定。
     #: 可以为空——首屏有场景卡，但用户也可以不挑直接写一句话，
     #: 这时候按默认窗口清算，不能因为"没归类"就永远不撮合。

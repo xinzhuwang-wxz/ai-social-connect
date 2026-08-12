@@ -183,6 +183,22 @@
               ],
               "title": "X-Campus-Id"
             }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
           }
         ],
         "responses": {
@@ -240,6 +256,22 @@
                 }
               ],
               "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
             }
           }
         ],
@@ -311,6 +343,22 @@
               ],
               "title": "X-Campus-Id"
             }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
           }
         ],
         "responses": {
@@ -369,6 +417,22 @@
                 }
               ],
               "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
             }
           }
         ],
@@ -489,6 +553,22 @@
                 }
               ],
               "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
             }
           }
         ],
@@ -618,6 +698,22 @@
               ],
               "title": "X-Campus-Id"
             }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
           }
         ],
         "responses": {
@@ -682,6 +778,22 @@
               ],
               "title": "X-Campus-Id"
             }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
           }
         ],
         "responses": {
@@ -745,6 +857,22 @@
                 }
               ],
               "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
             }
           }
         ],
@@ -1041,6 +1169,22 @@
                 }
               ],
               "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
             }
           }
         ],
@@ -1339,7 +1483,7 @@
           "proposals"
         ],
         "summary": "Blocked For",
-        "description": "凑不出队时说什么。\n\n这一屏最容易被做成一句\"暂无结果\"，而那正是用户流失的地方。",
+        "description": "凑不出队时说什么。\n\n这一屏最容易被做成一句\"暂无结果\"，而那正是用户流失的地方。\n\n**诊断走的是配队本身那条路**（`Clearing.diagnose`），不是这里另拼一份。\n原先这里只调 `explain_recall`，于是不管实际卡在哪，它一律说\n「现在还没有人能接上这件事」——校园里明明有一个人会剪辑，用户要的是\n四个人的队，而屏上那句话是假的。他据此以为这个方向没人，\n正确的下一步其实是把人数改小、或者自己拉两个人进来。",
         "operationId": "blocked_for_api_intents__intent_id__blocked_get",
         "parameters": [
           {
@@ -1415,6 +1559,7 @@
           "proposals"
         ],
         "summary": "Gate Status",
+        "description": "还在等谁——以及**成了的话，这件事在哪**。\n\n后面这半句原先只在 `:decide` 的响应里出现一次。于是最后点头的那个人\n看得到入口，其余的人和任何一次刷新看到的都是一句「都点头了，这件事\n成了。」——**刚答应下来的那件事没有门。**\n\n一次性的响应不能是某个东西的唯一来源：用户会刷新，会从别的地方点回来，\n会明天再打开。",
         "operationId": "gate_status_api_proposals__proposal_id__status_get",
         "parameters": [
           {
@@ -1699,6 +1844,728 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SpaceOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/plan": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Read Plan",
+        "description": "这次到底要做什么。还没建过卡时返回一个空态，不是 404。",
+        "operationId": "read_plan_api_spaces__space_id__plan_get",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Write Plan",
+        "description": "写这张卡。**改任何一项，所有人的点头一起失效。**\n\n不是\"改完清空点头\"，是点头记在这一版的摘要上——少写一处清空，\n用户就会在一个自己没同意过的计划上显示成已同意，\n而那是这个产品最不能出的错。",
+        "operationId": "write_plan_api_spaces__space_id__plan_put",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/plan:confirm": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Confirm Plan",
+        "description": "我确认这次就这么办。\n\n**身份取自请求头。** 承诺只接受真人签名的命令——请求体里带 id\n等于任何人都能替任何人承诺。",
+        "operationId": "confirm_plan_api_spaces__space_id__plan_confirm_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/day-of": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Read Day Of",
+        "description": "到那天了这一屏。计划还没定时间时它是不激活的，不是错误。",
+        "operationId": "read_day_of_api_spaces__space_id__day_of_get",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOfOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Set Day Of",
+        "description": "改我自己此刻的处境。**每人一条，覆盖**——它是处境不是历史。",
+        "operationId": "set_day_of_api_spaces__space_id__day_of_put",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DayOfIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOfOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/done": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Mark Done",
+        "description": "我这边做完了。\n\n**全员点头才算完成。** 一个人说做完了就标记完成，等于让他替所有人宣布，\n而这件事会写进每个人的森林。",
+        "operationId": "mark_done_api_spaces__space_id__done_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOfOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Unmark Done",
+        "description": "点错了收回。不给收回的路，人就不敢点——而不敢点会让这一步整个失效。",
+        "operationId": "unmark_done_api_spaces__space_id__done_delete",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayOfOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/polls": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "List Polls",
+        "description": "这个空间里正在投的票。",
+        "operationId": "list_polls_api_spaces__space_id__polls_get",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PollOut"
+                  },
+                  "title": "Response List Polls Api Spaces  Space Id  Polls Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/items/{item_id}:vote": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Vote",
+        "description": "投一票。改主意就再投一次——**一个人只能改自己那一票**。\n\n票不关门：票最多的那个不会自己变成\"定了\"，仍然要有人点头。\n一次投票是**表达**，不是承诺（不变量 11）。",
+        "operationId": "vote_api_spaces__space_id__items__item_id__vote_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PollOut"
                 }
               }
             }
@@ -2546,6 +3413,242 @@
         }
       }
     },
+    "/api/events/{event_id}/again": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Again",
+        "description": "照这件事再来一次，先给一张草稿。",
+        "operationId": "again_api_events__event_id__again_get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgainOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/events/{event_id}:again": {
+      "post": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Ask Them Again",
+        "description": "把这条新需求直接问上次那几个人。\n\n**不是把他们拉进来。** 不变量 3：成局前只有提案，没有关系——所以这里\n产出的仍然是一个要每个人各自点头的提案。\"一键重新邀请\"指的是\n\"一键问他们\"，不是\"一键把他们算进去\"。\n\n仍然过求解器和稳定性检查：上次一起做成过，不等于这次这几个人凑得成\n一个组。跳过这两步等于给他们一个看起来成立、实际不成立的提案。",
+        "operationId": "ask_them_again_api_events__event_id__again_post",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Event Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Ask Them Again Api Events  Event Id  Again Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/coming-up": {
+      "get": {
+        "tags": [
+          "memory"
+        ],
+        "summary": "Coming Up",
+        "description": "我这两天要出发的事。\n\n只看**已经定下来时间**的（行动确认卡写了 `starts_at`）。没定时间的事\n不该出现在这里——它不是\"快到了\"，它是\"还没定\"，而那一句在别处说。\n\n窗口是从现在到 36 小时后：够覆盖\"明天出发\"，又不会把下周的事提前\n塞进来。提前太多的提醒和不提醒一样，人会学会忽略它。",
+        "operationId": "coming_up_api_me_coming_up_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ComingUpOut"
+                  },
+                  "title": "Response Coming Up Api Me Coming Up Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/facets": {
       "get": {
         "tags": [
@@ -2817,6 +3920,485 @@
                     "$ref": "#/components/schemas/VisibilityOut"
                   },
                   "title": "Response My Visibility Api Me Visibility Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vocabulary": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Vocabulary",
+        "operationId": "vocabulary_api_vocabulary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VocabularyOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/profile": {
+      "get": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Read",
+        "description": "我这边现在是什么样。\n\n身份第一次出现时 `get_repositories` 已经把行建好了，所以这里不会\n遇到\"人不存在\"——那一步放在依赖里而不是每个端点各自记得做。",
+        "operationId": "read_api_me_profile_get",
+        "parameters": [
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "profile"
+        ],
+        "summary": "Write",
+        "description": "改写我这边。整份覆盖，不是追加——\"我不再想参与拍摄了\"必须说得出口。",
+        "operationId": "write_api_me_profile_put",
+        "parameters": [
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/me/seeds": {
+      "get": {
+        "tags": [
+          "seeds"
+        ],
+        "summary": "My Seeds",
+        "description": "我的信箱。已经找到同行者的种子不再占地方。",
+        "operationId": "my_seeds_api_me_seeds_get",
+        "parameters": [
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeedOut"
+                  },
+                  "title": "Response My Seeds Api Me Seeds Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/seeds/{intent_id}:respond": {
+      "post": {
+        "tags": [
+          "seeds"
+        ],
+        "summary": "Respond",
+        "description": "愿意参与，或者这次不感兴趣。\n\n**愿意不等于加入**：还要发起人挑中才成局。这一句必须在界面上说清楚，\n否则用户会以为自己已经答应了，然后在没被选中时觉得被放了鸽子。",
+        "operationId": "respond_api_seeds__intent_id__respond_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RespondRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}/candidates": {
+      "get": {
+        "tags": [
+          "seeds"
+        ],
+        "summary": "Candidates",
+        "description": "谁说了愿意。发起人在这一屏挑人。",
+        "operationId": "candidates_api_intents__intent_id__candidates_get",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidatesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/intents/{intent_id}/candidates/{who}:choose": {
+      "post": {
+        "tags": [
+          "seeds"
+        ],
+        "summary": "Choose",
+        "description": "挑一个人。收满就成局。\n\n**AI 不替发起人做这一下。** 它排序、它解释，但按下去的必须是人。",
+        "operationId": "choose_api_intents__intent_id__candidates__who__choose_post",
+        "parameters": [
+          {
+            "name": "intent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intent Id"
+            }
+          },
+          {
+            "name": "who",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Who"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CandidatesOut"
                 }
               }
             }
@@ -3388,6 +4970,87 @@
         ],
         "title": "AddItemRequest"
       },
+      "AgainOut": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "offers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Offers"
+          },
+          "needs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs"
+          },
+          "team_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Min"
+          },
+          "team_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Max"
+          },
+          "last_time_with": {
+            "items": {
+              "$ref": "#/components/schemas/cofield__http__memory__MemberOut"
+            },
+            "type": "array",
+            "title": "Last Time With"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "offers",
+          "needs"
+        ],
+        "title": "AgainOut",
+        "description": "照上次再来一次：一张**还没保存**的草稿。\n\nPRD 的最后一段（持续互动）。第一次行动完成后产品进入下一轮 Loop——\n而在这之前，森林里的一株点进去只能看。\n\n**它不直接建需求。** 抽取只产出草稿这条规矩在这里同样成立：\n带过来的东西要让本人过目，尤其是时间和地点——它们必然是新的。"
+      },
+      "AgainRequest": {
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "invite": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Invite"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent_id"
+        ],
+        "title": "AgainRequest"
+      },
       "BlockedOut": {
         "properties": {
           "stage": {
@@ -3430,6 +5093,109 @@
         ],
         "title": "BlockedOut",
         "description": "「还差这几件事」那一屏。凑不出队时把挫败换成一个具体的下一步。"
+      },
+      "CandidateOut": {
+        "properties": {
+          "principal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Principal Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "why": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Why"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "chosen": {
+            "type": "boolean",
+            "title": "Chosen",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "principal_id",
+          "display_name",
+          "why"
+        ],
+        "title": "CandidateOut",
+        "description": "一个说了愿意的人。"
+      },
+      "CandidatesOut": {
+        "properties": {
+          "still_need": {
+            "type": "integer",
+            "title": "Still Need"
+          },
+          "chosen": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateOut"
+            },
+            "type": "array",
+            "title": "Chosen"
+          },
+          "willing": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateOut"
+            },
+            "type": "array",
+            "title": "Willing"
+          },
+          "still_thinking": {
+            "type": "integer",
+            "title": "Still Thinking"
+          },
+          "formed_event_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formed Event Id"
+          },
+          "space_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Space Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "still_need",
+          "chosen",
+          "willing",
+          "still_thinking"
+        ],
+        "title": "CandidatesOut",
+        "description": "发起人那一屏。\n\n**不给分数。** AI 排序并解释，但最后那一下必须是人点的。"
       },
       "ChatOut": {
         "properties": {
@@ -3483,6 +5249,87 @@
           "early"
         ],
         "title": "ClearingOut"
+      },
+      "ComingUpOut": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "space_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Space Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "starts_at": {
+            "type": "string",
+            "title": "Starts At"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Where"
+          },
+          "bring": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bring"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          },
+          "my_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "title",
+          "starts_at"
+        ],
+        "title": "ComingUpOut",
+        "description": "明天要出发的事。\n\n## 为什么是拉不是推\n\n`lib/inbox.ts` 里已经有过同一个判断，照它：推送要设备权限、要服务端\n订阅、要一套退订，而这里真正要解决的问题只是**\"他不知道\"**。\n一个常驻的入口就够了。\n\n等真的有人说\"看到得太晚\"再上推送——反过来先上推送，是为一个还没被\n验证的问题付一整套代价。"
       },
       "CompileRequest": {
         "properties": {
@@ -3607,6 +5454,11 @@
             "type": "boolean",
             "title": "Stash",
             "default": false
+          },
+          "reach": {
+            "type": "string",
+            "title": "Reach",
+            "default": "campus"
           }
         },
         "type": "object",
@@ -3683,6 +5535,131 @@
         ],
         "title": "CreateOpportunityRequest"
       },
+      "DayOfIn": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "DayOfIn"
+      },
+      "DayOfOut": {
+        "properties": {
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active",
+            "default": false
+          },
+          "where": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Where"
+          },
+          "bring": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bring"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          },
+          "standings": {
+            "items": {
+              "$ref": "#/components/schemas/StandingOut"
+            },
+            "type": "array",
+            "title": "Standings"
+          },
+          "my_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My State"
+          },
+          "done_by": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Done By"
+          },
+          "done_waiting_on": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Done Waiting On"
+          },
+          "all_done": {
+            "type": "boolean",
+            "title": "All Done",
+            "default": false
+          },
+          "i_marked_done": {
+            "type": "boolean",
+            "title": "I Marked Done",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "DayOfOut",
+        "description": "到那天了这一屏。\n\nPRD：首版不需要持续定位，只要地址入口和必要状态。一个为了\"看谁到了\"\n而常开的定位权限，换来的信息量还不如一句\"我到了\"。"
+      },
       "DecideRequest": {
         "properties": {
           "answer": {
@@ -3699,6 +5676,11 @@
               }
             ],
             "title": "Condition"
+          },
+          "remind_me": {
+            "type": "boolean",
+            "title": "Remind Me",
+            "default": false
           }
         },
         "type": "object",
@@ -3947,6 +5929,25 @@
         ],
         "title": "EvidenceOut"
       },
+      "FollowUpOptionOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "FollowUpOptionOut",
+        "description": "一个可以直接点的答案。\n\n`label` 是屏上那几个字，`value` 是点下去之后填进卡里的东西。两者分开\n是因为「这周内」要变成一个真实的截止时刻，而屏上不该出现 ISO 时间戳。"
+      },
       "FollowUpOut": {
         "properties": {
           "text": {
@@ -3959,7 +5960,7 @@
           },
           "options": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/FollowUpOptionOut"
             },
             "type": "array",
             "title": "Options",
@@ -3971,7 +5972,8 @@
           "text",
           "narrows"
         ],
-        "title": "FollowUpOut"
+        "title": "FollowUpOut",
+        "description": "一个还没答的追问。\n\n原先 `options` 是几个词，界面把它们当说明文字印出来——**用户读得到，\n答不了**。一个答不了的追问比不问更糟：它明说了系统知道自己缺什么，\n然后什么也不做。"
       },
       "GapOut": {
         "properties": {
@@ -4401,6 +6403,10 @@
               }
             ],
             "title": "Action Kind"
+          },
+          "reach": {
+            "$ref": "#/components/schemas/Reach",
+            "default": "campus"
           }
         },
         "type": "object",
@@ -4657,7 +6663,7 @@
           "reach": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Reach"
+                "$ref": "#/components/schemas/ItemReach"
               },
               {
                 "type": "null"
@@ -4703,6 +6709,15 @@
         ],
         "title": "ItemOut",
         "description": "画布上的一条东西。\n\n`extras` 不原样透出：它在库里是开放的 JSON，透出去前端拿到的就是一个\n`additionalProperties: true`，也就是回到手写类型。四个有约定含义的键在\n这里显式成型；将来某种条目带了新键，这里补一行——契约本来就该是显式的。"
+      },
+      "ItemReach": {
+        "type": "string",
+        "enum": [
+          "ours",
+          "outside"
+        ],
+        "title": "ItemReach",
+        "description": "画布上一样东西谁能看见。\n\n**名字里带 Item 是必须的**：需求那一侧另有一个「投给谁」（`intent.Reach`），\n两个都叫 Reach 的时候契约里只活下来一个，而前端拿到的会是另一个概念的\n取值——一个概念在 DB / API / 前端同名，反过来说就是两个概念不能同名。\n\n\n只有两档，且默认是窄的那一档。档位多了就没人认真选，\n而\"发出去\"这件事不该有一个随手滑过去的中间态。"
       },
       "MessageOut": {
         "properties": {
@@ -4849,6 +6864,14 @@
             "type": "boolean",
             "title": "Counts As Done"
           },
+          "growth": {
+            "type": "string",
+            "title": "Growth"
+          },
+          "growth_word": {
+            "type": "string",
+            "title": "Growth Word"
+          },
           "space_id": {
             "anyOf": [
               {
@@ -4870,7 +6893,9 @@
           "state",
           "formed_at",
           "with_others",
-          "counts_as_done"
+          "counts_as_done",
+          "growth",
+          "growth_word"
         ],
         "title": "MyEventOut",
         "description": "一次做成的事，不是一个头衔。\n\n取消的事照样在这里——它属于本人的真实经历，藏起来就等于系统替他\n修饰了历史。但它**不产生成功记录**，所以 `counts_as_done` 是独立字段\n而不是让界面自己从 `state` 推：推错了就会把没做成的事说成做成了。"
@@ -5146,6 +7171,254 @@
         ],
         "title": "OrganizationOut"
       },
+      "PlanIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "bring": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bring"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "PlanIn"
+      },
+      "PlanOut": {
+        "properties": {
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "starts_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starts At"
+          },
+          "place": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Place"
+          },
+          "bring": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bring"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "change_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Note"
+          },
+          "nodded": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Nodded"
+          },
+          "waiting_on": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Waiting On"
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": false
+          },
+          "i_nodded": {
+            "type": "boolean",
+            "title": "I Nodded",
+            "default": false
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Missing"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exists"
+        ],
+        "title": "PlanOut",
+        "description": "行动确认卡。\n\nPRD 称它是**最重要的中间转化节点**：从一句模糊的\"有空一起\"，\n变成一项明确的共同承诺。\n\n它和成局那道门不是一回事——那道门问「要不要和这几个人组队」，\n这张卡问「我们要做的到底是什么」。"
+      },
+      "PollOut": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "tally": {
+            "items": {
+              "$ref": "#/components/schemas/TallyOut"
+            },
+            "type": "array",
+            "title": "Tally"
+          },
+          "my_choice": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Choice"
+          },
+          "waiting_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Waiting On"
+          },
+          "leading": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leading"
+          },
+          "settled": {
+            "type": "boolean",
+            "title": "Settled",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "question",
+          "tally"
+        ],
+        "title": "PollOut"
+      },
       "PreviewOut": {
         "properties": {
           "visible": {
@@ -5168,6 +7441,145 @@
         ],
         "title": "PreviewOut",
         "description": "「别人眼中的我」。\n\n这一屏让\"最小披露\"从一句承诺变成用户可以自己检查的东西。"
+      },
+      "ProfileIn": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "open_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Open To"
+          },
+          "self_intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Self Intro"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          },
+          "major": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Major"
+          }
+        },
+        "type": "object",
+        "title": "ProfileIn"
+      },
+      "ProfileOut": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "named_self": {
+            "type": "boolean",
+            "title": "Named Self",
+            "default": true
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "open_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Open To"
+          },
+          "self_intro": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Self Intro"
+          },
+          "zone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone"
+          },
+          "major": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Major"
+          },
+          "not_recognised": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Not Recognised"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "skills",
+          "open_to"
+        ],
+        "title": "ProfileOut"
       },
       "ProgressOut": {
         "properties": {
@@ -5230,11 +7642,11 @@
       "Reach": {
         "type": "string",
         "enum": [
-          "ours",
-          "outside"
+          "campus",
+          "known"
         ],
         "title": "Reach",
-        "description": "一样东西谁能看见。\n\n只有两档，且默认是窄的那一档。档位多了就没人认真选，\n而\"发出去\"这件事不该有一个随手滑过去的中间态。"
+        "description": "这条需求问谁。\n\n只有两档。「指定范围」（按组织、按院系）先不做：它要一套选择器，\n而在还没有人抱怨\"问的人太多\"之前，那套选择器只是一个必须被填的表单。"
       },
       "RecapOut": {
         "properties": {
@@ -5322,6 +7734,36 @@
         ],
         "title": "RelaxationOut"
       },
+      "RespondRequest": {
+        "properties": {
+          "willing": {
+            "type": "boolean",
+            "title": "Willing"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "remind_me": {
+            "type": "boolean",
+            "title": "Remind Me",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "willing"
+        ],
+        "title": "RespondRequest"
+      },
       "ReviseIntentRequest": {
         "properties": {
           "content": {
@@ -5362,7 +7804,7 @@
           "reach": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Reach"
+                "$ref": "#/components/schemas/ItemReach"
               },
               {
                 "type": "null"
@@ -5451,6 +7893,132 @@
         ],
         "title": "SeatOut"
       },
+      "SeedOut": {
+        "properties": {
+          "intent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Intent Id"
+          },
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "said": {
+            "type": "string",
+            "title": "Said"
+          },
+          "needs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Needs"
+          },
+          "offers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Offers"
+          },
+          "when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "When"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Where"
+          },
+          "team_min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Min"
+          },
+          "team_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Team Max"
+          },
+          "from_name": {
+            "type": "string",
+            "title": "From Name"
+          },
+          "why": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Why"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "my_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "My Note"
+          },
+          "space_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Space Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "intent_id",
+          "goal",
+          "said",
+          "needs",
+          "offers",
+          "from_name",
+          "why",
+          "state"
+        ],
+        "title": "SeedOut",
+        "description": "信箱里的一颗种子。\n\n**完整展示行动信息，有限展示发起人信息**（PRD 阶段三）：他要判断的是\n这件事值不值得参与，不是这个人够不够格。"
+      },
       "ShownFieldOut": {
         "properties": {
           "field_name": {
@@ -5519,6 +8087,25 @@
           "summary": {
             "type": "string",
             "title": "Summary"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/cofield__http__spaces__MemberOut"
+            },
+            "type": "array",
+            "title": "Members"
+          },
+          "growth": {
+            "type": "string",
+            "title": "Growth"
+          },
+          "growth_word": {
+            "type": "string",
+            "title": "Growth Word"
+          },
+          "growth_why": {
+            "type": "string",
+            "title": "Growth Why"
           }
         },
         "type": "object",
@@ -5531,10 +8118,54 @@
           "stuck",
           "drafts",
           "progress",
-          "summary"
+          "summary",
+          "members",
+          "growth",
+          "growth_word",
+          "growth_why"
         ],
         "title": "SpaceOut",
         "description": "一屏。\n\n四个分组对着验收标准的四句话：要做什么（`cards`）、谁负责什么（卡片上的\n负责人）、卡在哪（`stuck`）、还有哪些决定没关（`open_gates`）。\n`drafts` 是第五样——助手写了、等真人过目的，它单独一栏，因为它还不算数。\n\n`open_gates` 与 `stuck` 是 `cards` 的子集，不是另一批东西。照搬领域视图\n的分组，不做层间语义翻译。"
+      },
+      "StandingOut": {
+        "properties": {
+          "principal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Principal Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "word": {
+            "type": "string",
+            "title": "Word"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "principal_id",
+          "display_name",
+          "state",
+          "word"
+        ],
+        "title": "StandingOut"
       },
       "StarterOut": {
         "properties": {
@@ -5620,6 +8251,32 @@
         ],
         "title": "SuggestionOut",
         "description": "一条建议。\n\n每条都是独立的一条，不是一段话里的一句——混在一段话里，用户要么\n全接受要么全拒绝，\"每条都带一个「不用了」\"就无从谈起（07 原则四）。"
+      },
+      "TallyOut": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "votes": {
+            "type": "integer",
+            "title": "Votes"
+          },
+          "by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "votes"
+        ],
+        "title": "TallyOut",
+        "description": "一个选项，和投它的人。\n\n**票数实时可见。** 藏着计票会让人觉得系统在操纵，而这是一个五六个人\n的组——他们本来就看得见彼此。"
       },
       "TeamMemberOut": {
         "properties": {
@@ -5867,6 +8524,52 @@
         "title": "VisibilityOut",
         "description": "一次仍在生效的对外披露。\n\n`for_what` 不是装饰：一排\"3 项，72 小时后失效\"用户分辨不出哪条是哪条，\n也就没法决定收回哪一条。收不回的权利等于没有这项权利。"
       },
+      "VocabularyOut": {
+        "properties": {
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Skills"
+          },
+          "zones": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Zones"
+          },
+          "majors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Majors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "skills",
+          "zones",
+          "majors"
+        ],
+        "title": "VocabularyOut",
+        "description": "界面上那些可点的词。\n\n**不能在前端硬编码。** 词表是封闭的，加一项要同时想清楚抽取器认不认得\n它的常见说法；两处各写一份，界面上就会出现一个匹配零个人的词。"
+      },
+      "VoteRequest": {
+        "properties": {
+          "choice": {
+            "type": "integer",
+            "title": "Choice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "choice"
+        ],
+        "title": "VoteRequest"
+      },
       "WaitingOut": {
         "properties": {
           "next_round_at": {
@@ -5913,6 +8616,46 @@
           "text"
         ],
         "title": "WriteOwnIn"
+      },
+      "cofield__http__memory__MemberOut": {
+        "properties": {
+          "principal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Principal Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "principal_id",
+          "display_name"
+        ],
+        "title": "MemberOut",
+        "description": "上次一起做这件事的一个人。"
+      },
+      "cofield__http__spaces__MemberOut": {
+        "properties": {
+          "principal_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Principal Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "principal_id",
+          "display_name"
+        ],
+        "title": "MemberOut",
+        "description": "这件事里的一个人。\n\n名字不受逐项同意管——同意进一个小队本身就包含了同意在这里被指名，\n否则\"和谁一起做的\"根本没法呈现。"
       }
     }
   }

@@ -45,6 +45,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
@@ -54,22 +55,28 @@ from sqlalchemy import Connection
 
 from cofield.adapters.clock import FrozenClock
 from cofield.adapters.persistence.consent import EnvelopeRepository
+from cofield.adapters.persistence.deliveries import DeliveryRepository
 from cofield.adapters.persistence.intents import IntentRepository
 from cofield.adapters.persistence.proposals import Proposal, ProposalRepository
-from cofield.adapters.persistence.schema import intent_signals, principals
-from cofield.domain.model.action_kind import ActionKindRegistry
+from cofield.adapters.persistence.schema import (
+    event_members,
+    intent_signals,
+    principals,
+)
+from cofield.domain.model.action_kind import ActionKind, ActionKindRegistry
 from cofield.domain.model.consent import Audience
 from cofield.domain.model.intent import IntentSignal, IntentState
 from cofield.formation.service import ConfirmationGate
+from cofield.matching import pick, stability
 from cofield.matching import proof as proof_builder
-from cofield.matching import stability
+from cofield.matching.blocking import BlockingProof, explain_formation, explain_recall
 from cofield.matching.contracts import (
     CandidateGroup,
     Member,
     Requirement,
     SolveRequest,
 )
-from cofield.matching.funnel import WEEK_SLOTS, Funnel
+from cofield.matching.funnel import WEEK_SLOTS, Candidate, Funnel, _zone_of
 from cofield.matching.semantic import SemanticRetriever
 from cofield.matching.solver import solve
 
@@ -317,7 +324,15 @@ class Clearing:
         return due, urgent
 
     def _already_proposed(self, intent_id: UUID, *, since: datetime) -> bool:
-        return self._proposals.exists_since(intent_id, since=since)
+        """这个边界上已经处理过了没有。
+
+        投递制之后查的是**投递**，不是提案。查错表的后果是清算不再幂等：
+        同一条需求每跑一次就再投给几个新人，而候选那一侧收到的是一封又
+        一封"有人想找你"。
+        """
+        return DeliveryRepository(self._conn, self._campus).delivered_since(
+            intent_id, since=since
+        )
 
     # --- 解一条 ---
 
@@ -348,37 +363,56 @@ class Clearing:
             excluding=excluding,
         )
 
-    def _clear_one(
-        self,
-        intent: IntentSignal,
-        unit: MarketUnit,
-        *,
-        cleared_at: datetime,
-        now: datetime,
-        exposure: Counter[UUID],
-        excluding: frozenset[UUID] = frozenset(),
-    ) -> int:
-        """回应一条需求。返回产出的提案数（0 表示凑不出来）。
+    def diagnose(
+        self, intent: IntentSignal, *, now: datetime, kind: ActionKind | None = None
+    ) -> BlockingProof:
+        """这条需求为什么没配上。什么都不写。
 
-        稳定性未通过的分区**不得成为提案**——这是不可越过的三条之一。
-        所以过滤发生在写库之前，不是写完再标记。
+        ## 为什么它在这个类里
+
+        因为它必须走**和真正配队完全相同的那条路**。原先「还差这几件事」
+        那一屏自己建了一个漏斗、只调 `explain_recall`，于是不管实际卡在
+        哪里，它一律说「现在还没有人能接上这件事」。
+
+        真实发生过的一次：校园里确实有一个人会剪辑，用户要的是四个人的队。
+        屏上说的是"没有人能接上"——**这句话是假的**。他据此以为这个方向
+        没人，而正确的下一步是把人数改小，或者自己拉两个人进来。
+
+        `explain_formation`（人有、凑不成组）从建好那天起就没有被走到过：
+        接口只调另一个。两条解释路径写好了一条从不执行，等于没写。
+
+        诊断和配队一旦是两份代码，说出来的原因迟早和实际发生的事对不上，
+        而用户唯一看得见的就是那句解释。
         """
-        shortlist = Funnel(
-            self._conn, self._campus, retriever=self._retriever
-        ).shortlist(intent, now=now, exclude=excluding)
+        funnel = Funnel(self._conn, self._campus, retriever=self._retriever)
+        shortlist = funnel.shortlist(intent, now=now)
         if not shortlist.candidates:
-            return 0
+            return explain_recall(funnel, intent, shortlist.trace.blocked_by, kind=kind)
 
-        # 这一轮已经被提够了的人不再进池。逐条求解看不见这件事，
-        # 于是先提交的人会把稀缺角色全占走。
-        taken = (
-            frozenset(
-                pid for pid, n in exposure.items() if n >= MAX_PROPOSALS_PER_ROUND
+        unit = self._board.unit_for(intent.action_kind)
+        requirement = self._requirement(intent, unit, now=now)
+        result = solve(
+            SolveRequest(
+                requirement=requirement,
+                candidates=self._members(shortlist.candidates, Counter()),
             )
-            | excluding
         )
-        requirement = self._requirement(intent, unit, now=now, excluded=taken)
-        candidates = tuple(
+        return explain_formation(result, funnel=funnel, intent=intent, kind=kind)
+
+    def _members(
+        self,
+        candidates: Sequence[Candidate],
+        exposure: Counter[UUID],
+        *,
+        taken: frozenset[UUID] = frozenset(),
+    ) -> tuple[Member, ...]:
+        """候选 → 求解器认识的人。
+
+        配队和诊断共用它。两处各转一份的话，诊断算出来的可行性和真正
+        配队时的不一样，而那种不一致只会以"它说凑不出来，可我看到有人"
+        的形式暴露出来。
+        """
+        return tuple(
             Member(
                 principal_id=c.principal_id,
                 display_name=c.display_name,
@@ -389,63 +423,189 @@ class Clearing:
                 # 是为了让分散发生得更早，而不是等撞到墙才发生。
                 recent_exposure=exposure[c.principal_id],
             )
-            for c in shortlist.candidates
+            for c in candidates
             if c.principal_id not in taken
         )
-        if not candidates:
+
+    def _clear_one(
+        self,
+        intent: IntentSignal,
+        unit: MarketUnit,
+        *,
+        cleared_at: datetime,
+        now: datetime,
+        exposure: Counter[UUID],
+        excluding: frozenset[UUID] = frozenset(),
+    ) -> int:
+        """回应一条需求：**把这颗种子投给几个人**。返回投出去几份。
+
+        ## 这里从"产出一支队"改成了"投递"（ADR 0010）
+
+        旧做法是整组求解，产出 2–3 支候选队，每个人各自点头。它让发起人
+        **把勇气花在一次抛硬币上**——挑一支队，然后等对方理不理你。
+        而"石沉大海"正是这个产品要消灭的第二个痛点。
+
+        现在：投给多个候选，他们各自表态，发起人**在已经说了愿意的人里**挑。
+
+        ## 求解器去哪了
+
+        它没被删，降级了：从"产出提案"变成"产出排序与理由"（`pick.explain`）。
+        稳定性检查从这条路上撤掉——投递制下**不存在分区**，它判的
+        "没人更想去别的组"没有对象了。它留在组织者招募那条多席位的路上。
+        """
+        deliveries = DeliveryRepository(self._conn, self._campus)
+        touched = deliveries.already_touched(intent.id)
+        shortlist = Funnel(
+            self._conn, self._campus, retriever=self._retriever
+        ).shortlist(intent, now=now, exclude=excluding | touched)
+        if not shortlist.candidates:
             return 0
 
+        # 这一轮已经被投够了的人不再进池。它仍然是批量清算买到的唯一东西：
+        # 逐条投递看不见争用，先提交的人会把稀缺角色全占走。
+        taken = (
+            frozenset(
+                pid for pid, n in exposure.items() if n >= MAX_PROPOSALS_PER_ROUND
+            )
+            | excluding
+            | touched
+        )
+        mine = self._requester(intent)
+        together = self._together_before(intent.principal_id)
+
+        ranked = sorted(
+            (
+                (c, pick.explain(
+                    c,
+                    intent.content,
+                    my_availability=mine.availability,
+                    together_before=together.get(c.principal_id, 0),
+                ))
+                for c in shortlist.candidates
+                if c.principal_id not in taken
+            ),
+            key=lambda pair: (-pair[1].weight, str(pair[0].principal_id)),
+        )
+        if not ranked:
+            return 0
+
+        # **投给多少人是有上限的。** 选择过载是实测的：搜索上限 3→100 时
+        # 福利显著下降。而对候选那一侧，收到太多种子等于收到垃圾邮件。
+        wanted = intent.content.team_size.minimum - 1 if intent.content.team_size else 1
+        cap = min(len(ranked), max(3, wanted * 3))
+        made = deliveries.deliver(
+            intent.id,
+            to=[(c.principal_id, why.lines) for c, why in ranked[:cap]],
+            now=now,
+        )
+        exposure.update({c.principal_id for c, _ in ranked[:cap]})
+        return made
+
+    def _together_before(self, principal_id: UUID) -> dict[UUID, int]:
+        """我和谁一起做成过几件事。
+
+        **闭环靠这一句合上**：它是这个产品独有的、别处拿不到的信息，
+        所以它进理由，而且排序时权重不低。
+        """
+        mine = (
+            sa.select(event_members.c.event_id)
+            .where(event_members.c.principal_id == principal_id)
+            .where(event_members.c.left_at.is_(None))
+            .scalar_subquery()
+        )
+        rows = self._conn.execute(
+            sa.select(
+                event_members.c.principal_id, sa.func.count().label("times")
+            )
+            .where(event_members.c.event_id.in_(mine))
+            .where(event_members.c.principal_id != principal_id)
+            .where(event_members.c.left_at.is_(None))
+            .group_by(event_members.c.principal_id)
+        ).all()
+        return {r.principal_id: r.times for r in rows}
+
+    def propose_to(
+        self, intent: IntentSignal, *, people: Sequence[UUID], now: datetime
+    ) -> int:
+        """就这条需求，直接问这几个人。用于「照上次再来一次」。
+
+        ## 为什么不是"把他们拉进来"
+
+        不变量 3：**成局前只有提案，没有关系。** 所以这里产出的仍然是一个
+        要每个人各自点头的提案——一键重新邀请指的是"一键问他们"，
+        不是"一键把他们算进去"。
+
+        ## 为什么仍然过求解器和稳定性
+
+        因为上次一起做成过，不等于这次这几个人凑得成一个组：人数可能对不上，
+        角色可能缺，有人可能已经答应了别的事。跳过这两步等于给他们一个
+        看起来成立、实际不成立的提案。
+
+        不稳定的分区照样一个都不写（不可越过的三条之一）。
+
+        ## 问过一次就不再问
+
+        清算那条路一直守着这件事（`_already_proposed`），这条路原来漏了：
+        刷新一下页面再按一次，同一批人就会收到第二条待答复。**同一件事
+        问第二遍最伤**——而挡在界面上的"按过了"，刷新之后就没了。
+
+        所以边界画在这里：这条需求已经有人在等着答复，就不再往外发。
+        """
+        if self._proposals.outstanding_for(intent.id, now=now):
+            return 0
+
+        unit = self._board.unit_for(intent.action_kind)
+        requirement = self._requirement(intent, unit, now=now)
+        rows = self._conn.execute(
+            sa.select(
+                principals.c.id,
+                principals.c.display_name,
+                principals.c.skills,
+                principals.c.availability,
+                principals.c.zone,
+            ).where(principals.c.id.in_([p for p in people if p != intent.principal_id]))
+        ).all()
+        if not rows:
+            return 0
+
+        candidates = tuple(
+            Member(
+                principal_id=r.id,
+                display_name=r.display_name,
+                skills=frozenset(r.skills or ()),
+                availability=r.availability or "1" * WEEK_SLOTS,
+                zone=r.zone,
+            )
+            for r in rows
+        )
         result = solve(SolveRequest(requirement=requirement, candidates=candidates))
         if not result.groups:
             return 0
-
         verdict = stability.check(result.groups, requirement)
         if not verdict.passed:
-            # 不稳定的分区一个都不写。被塞进不喜欢的组的人会在第一次
-            # 线下见面前退出，整组随之崩掉——那比"这次没配上"糟得多。
             return 0
 
         visible = self._visible_fields(group_members=result.groups)
         gate = ConfirmationGate(self._conn, self._campus)
-        # 只给 2–3 个。实证表明选择变多反而降低决策质量：
-        # 搜索上限 3→100 时福利显著下降。
-        for group in result.groups[:3]:
+        made = 0
+        for group in result.groups[:1]:
             proposal_id = uuid4()
             self._proposals.add(
                 Proposal(
                     id=proposal_id,
                     intent_id=intent.id,
                     action_kind=intent.action_kind,
-                    cleared_at=cleared_at,
+                    cleared_at=now,
                     member_ids=tuple(m.principal_id for m in group.members),
                     proof=proof_builder.build(
-                        group,
-                        requirement,
-                        verdict,
-                        now=now,
-                        visible_fields=visible,
+                        group, requirement, verdict, now=now, visible_fields=visible
                     ),
                     expires_at=min(requirement.deadline, now + PROPOSAL_TTL),
                 )
             )
-            # **提案一落库就给成员开待答复。**
-            #
-            # 少了这一步，整条主路径是断的：用户拿到小队、点"我加入"，
-            # 收到的是一句"这个人不在这一版条款的名单里"。而门那边刻意
-            # 不静默创建承诺（否则任何人都能给任意提案投票），所以这根线
-            # 必须由**产出提案的人**接上——他才知道这一版条款的名单是谁。
             gate.invite(proposal_id, now=now)
-        # 按**不同的需求**计数，不按组数：一个人出现在给同一个人的两个备选队里
-        # 是正常的，那是同一次提案的两个选项；出现在六个人的提案里才是问题。
-        exposure.update(
-            {
-                m.principal_id
-                for group in result.groups[:3]
-                for m in group.members
-                if m.principal_id != intent.principal_id
-            }
-        )
-        return min(len(result.groups), 3)
+            made += 1
+        return made
 
     def _requirement(
         self,
@@ -459,28 +619,23 @@ class Clearing:
         # 没写时间窗时的兜底。
         #
         # 这里原来写的是 `unit.next_clearing(EPOCH) + 7 天`——而 EPOCH 是
-        # 窗口对齐用的固定基准（2026-01-01），不是"现在"。结果是兜底截止期
-        # 落在**过去**，提案一生成就已经过期，用户永远拿不到小队，
-        # 而清算日志显示一切正常。
-        #
-        # 这正是"领域核心不得直接调 now()"要防的那一类错误的反面：
-        # 时刻必须由调用方显式传进来，一旦有人图省事拿个常量当"现在"，
-        # 错误会静默且难查。
+        # 窗口对齐用的固定基准，不是"现在"。结果是兜底截止期落在**过去**，
+        # 提案一生成就已经过期，而清算日志显示一切正常。
         deadline = (
             content.time_window.deadline
-            if content.time_window
+            if content.time_window and content.time_window.deadline
             else now + DEFAULT_DEADLINE
         )
         size = content.team_size
         return Requirement(
             intent_id=intent.id,
-            requester=self._requester(intent),
             goal=content.goal,
-            needs=content.needs,
+            requester=self._requester(intent),
+            needs=tuple(content.needs),
             team_min=size.minimum if size else 2,
             team_max=size.maximum if size else 4,
+            zone=_zone_of(content.location_scope) if content.location_scope else None,
             deadline=deadline,
-            zone=content.location_scope,
             excluded=excluded,
         )
 
