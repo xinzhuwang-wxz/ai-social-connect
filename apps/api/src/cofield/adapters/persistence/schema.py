@@ -523,7 +523,13 @@ space_messages = sa.Table(
     #: 指不回去的话题就是它自己编的。
     sa.Column("about_item_id", sa.Uuid),
     sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    #: 单调序号。**`created_at` 相同时靠它定先后。**
+    #:
+    #: 原来的兜底键是 `id`，而 `id` 是随机 UUID——助手一次落两张话题卡用的是
+    #: 同一个时刻，于是那两张卡每读一次顺序都可能不一样，界面上会自己换位置。
+    sa.Column("seq", sa.BigInteger, sa.Identity(always=False), nullable=False),
     sa.Index("ix_messages_space_time", "campus_id", "space_id", "created_at"),
+    sa.Index("ix_messages_space_seq", "campus_id", "space_id", "seq"),
     sa.Index("ix_messages_thread", "campus_id", "replies_to"),
 )
 

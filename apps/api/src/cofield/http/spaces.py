@@ -18,12 +18,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import AwareDatetime, BaseModel, Field
 from sqlalchemy import Connection
@@ -32,6 +33,7 @@ from cofield.adapters.llm import Cassette, LiteLLMComposer
 from cofield.adapters.persistence.messages import Kind as MessageKind
 from cofield.adapters.persistence.messages import Message, MessageRepository
 from cofield.adapters.persistence.repositories import Repositories
+from cofield.adapters.persistence.schema import event_members
 from cofield.adapters.persistence.spaces import Item, Space, SpaceRepository
 from cofield.domain.ports.composer import Composer, DraftKind
 from cofield.http.deps import (
@@ -646,6 +648,14 @@ def accept_suggestion(
 class MessageOut(BaseModel):
     id: UUID
     author_id: UUID
+    #: 说这句话的人叫什么。
+    #:
+    #: 少了它，群里除了"我"和助手，所有人都叫「组里的人」——两个不同的人
+    #: 在屏幕上完全一样。而这一屏本该是他们**开始认识彼此**的地方。
+    #:
+    #: 名字不受逐项授权管：同意被放进一个小队本身就包含了同意在队里被指名，
+    #: 否则一个组里的人连彼此是谁都不知道。要遮的是切面内容，不是名字。
+    author_name: str
     #: 是不是助手说的。**一眼可辨**——界面靠它把助手的话和人的话分开，
     #: 分不清谁说的，"AI 起草、人类决定"就只是一句话。
     is_agent: bool
@@ -655,6 +665,11 @@ class MessageOut(BaseModel):
     replies_to: UUID | None = None
     #: 这张话题卡关于哪件还没定的事。
     about_item_id: UUID | None = None
+    #: 那件事叫什么。**编号不能上屏**，而少了这一位界面只能自己再打一次
+    #: 请求去问名字——一次为了显示一行字的额外往返。
+    about_item_title: str | None = None
+    #: 那件事定下来了没有。定了之后话题卡就该改口，不再催人。
+    about_item_settled: bool = False
 
 
 class ThreadOut(BaseModel):
@@ -682,10 +697,22 @@ class SayRequest(BaseModel):
     replies_to: UUID | None = None
 
 
-def _message_out(message: Message) -> MessageOut:
+def _message_out(
+    message: Message,
+    names: Mapping[UUID, str] | None = None,
+    items: Mapping[UUID, tuple[str, bool]] | None = None,
+) -> MessageOut:
+    about = (items or {}).get(message.about_item_id) if message.about_item_id else None
     return MessageOut(
         id=message.id,
         author_id=message.author_id,
+        author_name=(
+            "助手"
+            if message.is_agent
+            else (names or {}).get(message.author_id, "这位同学")
+        ),
+        about_item_title=about[0] if about else None,
+        about_item_settled=about[1] if about else False,
         is_agent=message.is_agent,
         kind=message.kind.value,
         text=message.text,
@@ -695,16 +722,48 @@ def _message_out(message: Message) -> MessageOut:
     )
 
 
+def _who_and_what(
+    board: Board, repos: ReposDep, *, now: datetime
+) -> tuple[dict[UUID, str], dict[UUID, tuple[str, bool]]]:
+    """这个空间里都有谁，以及有哪些还没定的事。
+
+    名字从事件成员来，不从消息作者来——一个退出过的人说过的话仍然要
+    显示他的名字，否则聊天记录会变成一份自我修饰过的历史。
+    """
+    member_ids = [
+        row.principal_id
+        for row in board.conn.execute(
+            sa.select(event_members.c.principal_id).where(
+                event_members.c.event_id == board.space.event_id
+            )
+        ).all()
+    ]
+    names: dict[UUID, str] = {}
+    for member_id in member_ids:
+        person = repos.principals.get(member_id)
+        if person is not None:
+            names[member_id] = person.display_name
+
+    view = board.canvas.view(now=now)
+    open_ids = {card.item.id for card in view.open_gates}
+    items = {
+        card.item.id: (card.item.title, card.item.id not in open_ids)
+        for card in (*view.cards, *view.open_gates)
+    }
+    return names, items
+
+
 @router.get("/spaces/{space_id}/chat", response_model=ChatOut)
-def read_chat(board: BoardDep) -> ChatOut:
+def read_chat(board: BoardDep, repos: ReposDep, clock: ClockDep) -> ChatOut:
     """说过的话，全部。"""
     repo = MessageRepository(board.conn, board.campus)
+    names, items = _who_and_what(board, repos, now=clock.now())
     return ChatOut(
-        messages=[_message_out(m) for m in repo.history(board.space.id)],
+        messages=[_message_out(m, names, items) for m in repo.history(board.space.id)],
         threads=[
             ThreadOut(
-                topic=_message_out(t.topic),
-                replies=[_message_out(r) for r in t.replies],
+                topic=_message_out(t.topic, names, items),
+                replies=[_message_out(r, names, items) for r in t.replies],
                 answered=t.answered,
             )
             for t in repo.threads(board.space.id)
@@ -713,7 +772,9 @@ def read_chat(board: BoardDep) -> ChatOut:
 
 
 @router.post("/spaces/{space_id}/chat", response_model=MessageOut, status_code=201)
-def say(board: BoardDep, payload: SayRequest, clock: ClockDep) -> MessageOut:
+def say(
+    board: BoardDep, payload: SayRequest, clock: ClockDep, repos: ReposDep
+) -> MessageOut:
     """说一句话。
 
     **作者来自请求头，不来自请求体**——否则任何人都能以任何人的名义发言，
@@ -730,18 +791,23 @@ def say(board: BoardDep, payload: SayRequest, clock: ClockDep) -> MessageOut:
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from None
-    return _message_out(message)
+    names, items = _who_and_what(board, repos, now=clock.now())
+    return _message_out(message, names, items)
 
 
 @router.post("/spaces/{space_id}/chat:topics", response_model=list[MessageOut])
 def raise_topics(
-    board: BoardDep, composer: ComposerDep, clock: ClockDep
+    board: BoardDep, composer: ComposerDep, clock: ClockDep, repos: ReposDep
 ) -> list[MessageOut]:
     """让助手把还没定的事，变成几句可以回答的话。
 
     **它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是
-    开着的决策门和成局证明里留给真人的那几条；凭空造话题的助手会很快
-    被所有人忽略，而一旦被忽略，之后它说什么都没人看了。
+    这个空间里**开着的决策门**；凭空造话题的助手会很快被所有人忽略，
+    而一旦被忽略，之后它说什么都没人看了。
+
+    成局证明里「留给真人决定」的那几条不在这里直接取——它们在成局那一刻
+    已经变成了空间里的第一张卡（见 `events.form`）。从证明里再取一遍会让
+    同一件事以两种形态出现，而"同一件事问第二遍"正是这一层最避讳的。
 
     助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。
     同一件事不问第二遍——问第二遍说明它没在听。
@@ -782,4 +848,5 @@ def raise_topics(
         )
         for topic in topics
     ]
-    return [_message_out(m) for m in said]
+    names, items = _who_and_what(board, repos, now=now)
+    return [_message_out(m, names, items) for m in said]

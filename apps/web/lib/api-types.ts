@@ -729,8 +729,12 @@ export interface paths {
          * @description 让助手把还没定的事，变成几句可以回答的话。
          *
          *     **它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是
-         *     开着的决策门和成局证明里留给真人的那几条；凭空造话题的助手会很快
-         *     被所有人忽略，而一旦被忽略，之后它说什么都没人看了。
+         *     这个空间里**开着的决策门**；凭空造话题的助手会很快被所有人忽略，
+         *     而一旦被忽略，之后它说什么都没人看了。
+         *
+         *     成局证明里「留给真人决定」的那几条不在这里直接取——它们在成局那一刻
+         *     已经变成了空间里的第一张卡（见 `events.form`）。从证明里再取一遍会让
+         *     同一件事以两种形态出现，而"同一件事问第二遍"正是这一层最避讳的。
          *
          *     助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。
          *     同一件事不问第二遍——问第二遍说明它没在听。
@@ -1613,6 +1617,8 @@ export interface components {
              * Format: uuid
              */
             author_id: string;
+            /** Author Name */
+            author_name: string;
             /** Is Agent */
             is_agent: boolean;
             /** Kind */
@@ -1628,6 +1634,13 @@ export interface components {
             replies_to?: string | null;
             /** About Item Id */
             about_item_id?: string | null;
+            /** About Item Title */
+            about_item_title?: string | null;
+            /**
+             * About Item Settled
+             * @default false
+             */
+            about_item_settled: boolean;
         };
         /**
          * MyEventOut

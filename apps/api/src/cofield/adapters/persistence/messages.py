@@ -116,6 +116,23 @@ class MessageRepository:
             # 之后它说什么都没人看了。指不回去就不许发。
             raise ValueError("助手发的话题必须指得回一件还没定的事")
 
+        if replies_to is not None:
+            # **回复只能挂在这个空间里的一张话题卡下面。**
+            #
+            # 不校验的话，回给一条普通消息、或者指向一个随机 id 的回复
+            # 会被接受，然后在 `threads()` 里**消失**——只在平铺列表里出现。
+            # 「只有一层」原本是组装时保证的，代价是消息被静默吞掉。
+            # 而静默地少一条，比明确地拒一条糟得多。
+            parent = self._conn.execute(
+                sa.select(space_messages.c.kind, space_messages.c.space_id).where(
+                    space_messages.c.id == replies_to
+                )
+            ).one_or_none()
+            if parent is None or parent.space_id != space_id:
+                raise ValueError("回的那条不在这里")
+            if Kind(parent.kind) is not Kind.TOPIC:
+                raise ValueError("只能回在话题卡下面")
+
         message = Message(
             id=uuid4(),
             space_id=space_id,
@@ -154,7 +171,9 @@ class MessageRepository:
         rows = self._conn.execute(
             sa.select(space_messages)
             .where(space_messages.c.space_id == space_id)
-            .order_by(space_messages.c.created_at.asc(), space_messages.c.id.asc())
+            # 兜底键必须**单调**。原来用的是 `id`（随机 UUID），于是助手
+            # 一次落的两张话题卡每读一次顺序都可能不一样。
+            .order_by(space_messages.c.created_at.asc(), space_messages.c.seq.asc())
         ).all()
         return tuple(_to_domain(r) for r in rows)
 

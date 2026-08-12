@@ -2402,7 +2402,7 @@
           "spaces"
         ],
         "summary": "Raise Topics",
-        "description": "让助手把还没定的事，变成几句可以回答的话。\n\n**它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是\n开着的决策门和成局证明里留给真人的那几条；凭空造话题的助手会很快\n被所有人忽略，而一旦被忽略，之后它说什么都没人看了。\n\n助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。\n同一件事不问第二遍——问第二遍说明它没在听。",
+        "description": "让助手把还没定的事，变成几句可以回答的话。\n\n**它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是\n这个空间里**开着的决策门**；凭空造话题的助手会很快被所有人忽略，\n而一旦被忽略，之后它说什么都没人看了。\n\n成局证明里「留给真人决定」的那几条不在这里直接取——它们在成局那一刻\n已经变成了空间里的第一张卡（见 `events.form`）。从证明里再取一遍会让\n同一件事以两种形态出现，而\"同一件事问第二遍\"正是这一层最避讳的。\n\n助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。\n同一件事不问第二遍——问第二遍说明它没在听。",
         "operationId": "raise_topics_api_spaces__space_id__chat_topics_post",
         "parameters": [
           {
@@ -4716,6 +4716,10 @@
             "format": "uuid",
             "title": "Author Id"
           },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name"
+          },
           "is_agent": {
             "type": "boolean",
             "title": "Is Agent"
@@ -4756,12 +4760,29 @@
               }
             ],
             "title": "About Item Id"
+          },
+          "about_item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "About Item Title"
+          },
+          "about_item_settled": {
+            "type": "boolean",
+            "title": "About Item Settled",
+            "default": false
           }
         },
         "type": "object",
         "required": [
           "id",
           "author_id",
+          "author_name",
           "is_agent",
           "kind",
           "text",

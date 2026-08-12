@@ -581,3 +581,94 @@ def test_replies_hang_under_the_topic_card_and_the_mainline_stays_out(
     # 主线上那句谁都不挂，但它在整条记录里。
     assert all(mainline.id != r.id for t in threads.values() for r in t.replies)
     assert len(everything) == 5
+
+
+# --- 顺序与指向（三个由测试暴露的真 bug）---
+
+
+def test_two_cards_raised_in_the_same_instant_keep_their_order(
+    engine: Engine,
+) -> None:
+    """助手一次落两张话题卡用的是**同一个时刻**。
+
+    原来的兜底键是 `id`——随机 UUID——于是那两张卡每读一次先后都可能
+    不一样，界面上会自己换位置。兜底键必须单调。
+    """
+    space_id = open_space(engine)
+    with campus_connection(engine, CAMPUS) as conn:
+        repo = MessageRepository(conn, CAMPUS)
+        first = repo.say(
+            space_id,
+            author_id=field_agent(space_id).id,
+            text="碰面地点定在哪？",
+            now=NOW,
+            kind=Kind.TOPIC,
+            is_agent=True,
+            about_item_id=uuid4(),
+        )
+        second = repo.say(
+            space_id,
+            author_id=field_agent(space_id).id,
+            text="署名怎么写？",
+            now=NOW,
+            kind=Kind.TOPIC,
+            is_agent=True,
+            about_item_id=uuid4(),
+        )
+
+    # 读十次都该是同一个顺序。随机兜底键下这个断言会间歇性失败——
+    # 而间歇性失败的界面比稳定错误的界面更难被相信。
+    for _ in range(10):
+        with campus_connection(engine, CAMPUS) as conn:
+            order = [m.id for m in MessageRepository(conn, CAMPUS).history(space_id)]
+        assert order == [first.id, second.id]
+
+
+def test_a_reply_that_would_vanish_is_refused_instead(engine: Engine) -> None:
+    """回给一条普通消息、或者指向一个不存在的 id——原来都会被接受，
+    然后在话题视图里**消失**，只在平铺列表里出现。
+
+    静默地少一条，比明确地拒一条糟得多。
+    """
+    space_id = open_space(engine)
+    with campus_connection(engine, CAMPUS) as conn:
+        repo = MessageRepository(conn, CAMPUS)
+        plain = repo.say(space_id, author_id=ME, text="我周四有空", now=NOW)
+
+        with pytest.raises(ValueError, match="话题卡"):
+            repo.say(
+                space_id,
+                author_id=ME,
+                text="回给一条普通消息",
+                now=NOW,
+                replies_to=plain.id,
+            )
+        with pytest.raises(ValueError, match="不在这里"):
+            repo.say(
+                space_id,
+                author_id=ME,
+                text="回给一个不存在的 id",
+                now=NOW,
+                replies_to=uuid4(),
+            )
+
+
+def test_a_reply_cannot_reach_into_another_space(engine: Engine) -> None:
+    """别的空间的话题卡不能被回复——那条回复对两边都不可见。"""
+    mine = open_space(engine)
+    theirs = open_space(engine)
+    with campus_connection(engine, CAMPUS) as conn:
+        repo = MessageRepository(conn, CAMPUS)
+        elsewhere = repo.say(
+            theirs,
+            author_id=field_agent(theirs).id,
+            text="他们那边的话题",
+            now=NOW,
+            kind=Kind.TOPIC,
+            is_agent=True,
+            about_item_id=uuid4(),
+        )
+        with pytest.raises(ValueError, match="不在这里"):
+            repo.say(
+                mine, author_id=ME, text="插一句", now=NOW, replies_to=elsewhere.id
+            )
