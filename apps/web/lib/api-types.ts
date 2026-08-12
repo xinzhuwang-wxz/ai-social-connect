@@ -688,6 +688,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/spaces/{space_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read Chat
+         * @description 说过的话，全部。
+         */
+        get: operations["read_chat_api_spaces__space_id__chat_get"];
+        put?: never;
+        /**
+         * Say
+         * @description 说一句话。
+         *
+         *     **作者来自请求头，不来自请求体**——否则任何人都能以任何人的名义发言，
+         *     而聊天记录是这个组以后唯一能回去查的东西。
+         */
+        post: operations["say_api_spaces__space_id__chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/spaces/{space_id}/chat:topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Raise Topics
+         * @description 让助手把还没定的事，变成几句可以回答的话。
+         *
+         *     **它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是
+         *     开着的决策门和成局证明里留给真人的那几条；凭空造话题的助手会很快
+         *     被所有人忽略，而一旦被忽略，之后它说什么都没人看了。
+         *
+         *     助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。
+         *     同一件事不问第二遍——问第二遍说明它没在听。
+         */
+        post: operations["raise_topics_api_spaces__space_id__chat_topics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/me/events": {
         parameters: {
             query?: never;
@@ -1015,6 +1069,19 @@ export interface components {
             relaxations: components["schemas"]["RelaxationOut"][];
             /** Next Steps */
             next_steps: components["schemas"]["NextStepOut"][];
+        };
+        /**
+         * ChatOut
+         * @description 整条聊天记录 + 话题卡。
+         *
+         *     **不分页。**「大家能看到整体的聊天记录」是这一层的承诺；一个默认只给
+         *     最近五十条的接口，会让"看看当时怎么说的"变成一件做不到的事。
+         */
+        ChatOut: {
+            /** Messages */
+            messages: components["schemas"]["MessageOut"][];
+            /** Threads */
+            threads: components["schemas"]["ThreadOut"][];
         };
         /** ClearingOut */
         ClearingOut: {
@@ -1534,6 +1601,34 @@ export interface components {
             /** Notice */
             notice?: string | null;
         };
+        /** MessageOut */
+        MessageOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Author Id
+             * Format: uuid
+             */
+            author_id: string;
+            /** Is Agent */
+            is_agent: boolean;
+            /** Kind */
+            kind: string;
+            /** Text */
+            text: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Replies To */
+            replies_to?: string | null;
+            /** About Item Id */
+            about_item_id?: string | null;
+        };
         /**
          * MyEventOut
          * @description 一次做成的事，不是一个头衔。
@@ -1804,6 +1899,13 @@ export interface components {
             assignee_id?: string | null;
             reach?: components["schemas"]["Reach"] | null;
         };
+        /** SayRequest */
+        SayRequest: {
+            /** Text */
+            text: string;
+            /** Replies To */
+            replies_to?: string | null;
+        };
         /** SeatIn */
         SeatIn: {
             /** Role */
@@ -1948,6 +2050,14 @@ export interface components {
             minimum: number;
             /** Maximum */
             maximum: number;
+        };
+        /** ThreadOut */
+        ThreadOut: {
+            topic: components["schemas"]["MessageOut"];
+            /** Replies */
+            replies: components["schemas"]["MessageOut"][];
+            /** Answered */
+            answered: boolean;
         };
         /** TimeWindowOut */
         TimeWindowOut: {
@@ -3133,6 +3243,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_chat_api_spaces__space_id__chat_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    say_api_spaces__space_id__chat_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SayRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    raise_topics_api_spaces__space_id__chat_topics_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-campus-id"?: string | null;
+                "x-principal-id"?: string | null;
+            };
+            path: {
+                space_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageOut"][];
                 };
             };
             /** @description Validation Error */

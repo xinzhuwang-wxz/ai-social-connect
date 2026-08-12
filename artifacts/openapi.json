@@ -2236,6 +2236,246 @@
         }
       }
     },
+    "/api/spaces/{space_id}/chat": {
+      "get": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Read Chat",
+        "description": "说过的话，全部。",
+        "operationId": "read_chat_api_spaces__space_id__chat_get",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Say",
+        "description": "说一句话。\n\n**作者来自请求头，不来自请求体**——否则任何人都能以任何人的名义发言，\n而聊天记录是这个组以后唯一能回去查的东西。",
+        "operationId": "say_api_spaces__space_id__chat_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/spaces/{space_id}/chat:topics": {
+      "post": {
+        "tags": [
+          "spaces"
+        ],
+        "summary": "Raise Topics",
+        "description": "让助手把还没定的事，变成几句可以回答的话。\n\n**它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是\n开着的决策门和成局证明里留给真人的那几条；凭空造话题的助手会很快\n被所有人忽略，而一旦被忽略，之后它说什么都没人看了。\n\n助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。\n同一件事不问第二遍——问第二遍说明它没在听。",
+        "operationId": "raise_topics_api_spaces__space_id__chat_topics_post",
+        "parameters": [
+          {
+            "name": "space_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Space Id"
+            }
+          },
+          {
+            "name": "x-campus-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Campus-Id"
+            }
+          },
+          {
+            "name": "x-principal-id",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Principal-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MessageOut"
+                  },
+                  "title": "Response Raise Topics Api Spaces  Space Id  Chat Topics Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/me/events": {
       "get": {
         "tags": [
@@ -3190,6 +3430,31 @@
         ],
         "title": "BlockedOut",
         "description": "「还差这几件事」那一屏。凑不出队时把挫败换成一个具体的下一步。"
+      },
+      "ChatOut": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "threads": {
+            "items": {
+              "$ref": "#/components/schemas/ThreadOut"
+            },
+            "type": "array",
+            "title": "Threads"
+          }
+        },
+        "type": "object",
+        "required": [
+          "messages",
+          "threads"
+        ],
+        "title": "ChatOut",
+        "description": "整条聊天记录 + 话题卡。\n\n**不分页。**「大家能看到整体的聊天记录」是这一层的承诺；一个默认只给\n最近五十条的接口，会让\"看看当时怎么说的\"变成一件做不到的事。"
       },
       "ClearingOut": {
         "properties": {
@@ -4439,6 +4704,71 @@
         "title": "ItemOut",
         "description": "画布上的一条东西。\n\n`extras` 不原样透出：它在库里是开放的 JSON，透出去前端拿到的就是一个\n`additionalProperties: true`，也就是回到手写类型。四个有约定含义的键在\n这里显式成型；将来某种条目带了新键，这里补一行——契约本来就该是显式的。"
       },
+      "MessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "author_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Author Id"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "title": "Is Agent"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "replies_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replies To"
+          },
+          "about_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "About Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author_id",
+          "is_agent",
+          "kind",
+          "text",
+          "created_at"
+        ],
+        "title": "MessageOut"
+      },
       "MyEventOut": {
         "properties": {
           "event_id": {
@@ -5023,6 +5353,33 @@
         "title": "ReviseItemRequest",
         "description": "推进、指派、改可见范围。\n\n三样都可选，且\"没给\"与\"给了 null\"是两件事：`assignee_id: null` 是\n把活放回去，不给这个字段才是不动它。区分靠 `model_fields_set`。"
       },
+      "SayRequest": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "replies_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replies To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SayRequest"
+      },
       "SeatIn": {
         "properties": {
           "role": {
@@ -5342,6 +5699,31 @@
           "maximum"
         ],
         "title": "TeamSizeOut"
+      },
+      "ThreadOut": {
+        "properties": {
+          "topic": {
+            "$ref": "#/components/schemas/MessageOut"
+          },
+          "replies": {
+            "items": {
+              "$ref": "#/components/schemas/MessageOut"
+            },
+            "type": "array",
+            "title": "Replies"
+          },
+          "answered": {
+            "type": "boolean",
+            "title": "Answered"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic",
+          "replies",
+          "answered"
+        ],
+        "title": "ThreadOut"
       },
       "TimeWindowOut": {
         "properties": {

@@ -481,6 +481,52 @@ memory_facets = sa.Table(
     sa.Index("ix_facets_event", "campus_id", "event_id"),
 )
 
+
+# --- 成局之后的群聊（N+1）---
+
+#: 共域里说过的话。
+#:
+#: ## 为什么不塞进 `space_items`
+#:
+#: 条目有状态、有负责人、有截止时刻、进不进度。消息一样都没有。
+#: 混在一起，"做完了多少"就会被聊天量冲淡——而不变量 6 说的正是
+#: **空间因真实行动证据生长，不因聊天量生长**。
+#:
+#: ## 和成局前的受限协商是两回事
+#:
+#: `negotiation_messages` 的每一句都是一次披露事件，所以只有七种结构化
+#: 类型、没有一种构成同意。而这里的人已经在同一个组里了——他们本来就该
+#: 能自由说话。**约束的理由消失了，约束就该消失。**
+#:
+#: ## 话题卡不是闲聊
+#:
+#: 助手发的 `topic` 只能来自**还没定的事**（开着的决策门、成局证明里
+#: 留给真人的那几条）。它的目的是把"该聊的"变成一句可以回答的话，
+#: 不是活跃气氛。凭空造话题的助手会很快被所有人忽略。
+space_messages = sa.Table(
+    "space_messages",
+    metadata,
+    sa.Column("id", sa.Uuid, primary_key=True),
+    sa.Column("campus_id", sa.Text, nullable=False),
+    sa.Column("space_id", sa.Uuid, nullable=False),
+    sa.Column("author_id", sa.Uuid, nullable=False),
+    #: 是不是助手说的。**一眼可辨**——分不清谁说的，
+    #: "AI 起草、人类决定"就只是一句话。
+    sa.Column("is_agent", sa.Boolean, nullable=False, server_default=sa.false()),
+    #: said（一句话）/ topic（一张待聊的话题卡）
+    sa.Column("kind", sa.Text, nullable=False, server_default="said"),
+    sa.Column("text", sa.Text, nullable=False),
+    #: 挂在哪张话题卡下面。空 = 主线。
+    #: 用一层而不是任意深度：两层以上的嵌套在手机上没人读得下去。
+    sa.Column("replies_to", sa.Uuid),
+    #: 这张话题卡是关于哪条待定的事。**助手发的话题必须指得回去**——
+    #: 指不回去的话题就是它自己编的。
+    sa.Column("about_item_id", sa.Uuid),
+    sa.Column("created_at", sa.TIMESTAMP(timezone=True), nullable=False),
+    sa.Index("ix_messages_space_time", "campus_id", "space_id", "created_at"),
+    sa.Index("ix_messages_thread", "campus_id", "replies_to"),
+)
+
 #: 启用了行级隔离的表。迁移与测试都以这份清单为准，避免新表漏加策略。
 RLS_TABLES: tuple[str, ...] = (
     "principals",
@@ -501,4 +547,5 @@ RLS_TABLES: tuple[str, ...] = (
     "negotiation_messages",
     "evidence",
     "memory_facets",
+    "space_messages",
 )

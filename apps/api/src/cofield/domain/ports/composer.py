@@ -51,6 +51,12 @@ class DraftKind(StrEnum):
     FACET_EXTRACTION = "facet_extraction"
     #: 成局证明转写。**可替代**（模板能干），所以它降级最不痛。
     PROOF_NARRATION = "proof_narration"
+    #: 把一件**还没定的事**写成一句可以回答的话。
+    #:
+    #: 它不是"生成话题"——凭空造话题的助手会很快被所有人忽略，
+    #: 而一旦被忽略，之后它说什么都没人看了。输入永远是一条已经存在的
+    #: 待定事项，输出只是把它变得好回答。
+    OPEN_QUESTION = "open_question"
 
 
 @dataclass(frozen=True, slots=True)

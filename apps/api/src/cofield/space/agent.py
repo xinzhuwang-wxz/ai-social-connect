@@ -31,6 +31,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -67,6 +68,9 @@ class Power(StrEnum):
     READ_APPROVED = "read_approved"
     #: 往画布上放草稿。草稿不算数，所以这一条不需要真人预先批准。
     DRAFT = "draft"
+    #: 在群里发一张话题卡。它同样什么都定不了——**聊出共识不等于结门**，
+    #: 决策门仍然要每个人各自点头。
+    ASK = "ask"
 
 
 #: 助手**永远**不能拿到的能力，以及为什么。
@@ -127,6 +131,21 @@ class Suggestion:
     grounded_in: tuple[str, ...]
     #: 落进画布之后的条目 id。
     item_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Topic:
+    """一张待聊的话题卡。
+
+    **它只能来自一件还没定的事。** `about_item_id` 不是可选的元数据，
+    是这张卡有没有资格存在的凭据——指不回去的话题就是助手自己编的，
+    而编出来的话题会让人学会忽略它说的所有话。
+    """
+
+    text: str
+    about_item_id: UUID
+    #: 这张卡是根据什么写的。用户点开能看到。
+    grounded_in: tuple[str, ...]
 
 
 class FieldAgent:
@@ -242,6 +261,54 @@ class FieldAgent:
             grounded_in=draft.grounded_in,
         )
         return (suggestion,)[:limit]
+
+    def open_questions(
+        self,
+        token: Capability,
+        *,
+        unsettled: Sequence[tuple[UUID, str]],
+        already_asked: frozenset[UUID],
+        now: datetime,
+        limit: int = 2,
+    ) -> tuple[Topic, ...]:
+        """把还没定的事，变成几句可以回答的话。
+
+        `unsettled` 是**已经存在的**待定事项（开着的决策门、成局证明里
+        留给真人的那几条）。助手不挑话题，只是把它们写得好回答一点。
+
+        `already_asked` 里的不再问——**同一件事问第二遍最伤**，
+        它说明这个助手没在听。
+
+        一次最多两张。破冰不是刷屏：一口气甩五个问题，人只会一个都不答。
+        """
+        self.check(token, Power.ASK, now=now)
+
+        pending = [(i, text) for i, text in unsettled if i not in already_asked]
+        if not pending:
+            # 没有待定的事就闭嘴。这时候发话题只能是闲聊，
+            # 而闲聊正是让人学会忽略它的那件事。
+            return ()
+
+        asked: list[Topic] = []
+        for item_id, what in pending[:limit]:
+            try:
+                draft = self._composer.draft(
+                    DraftKind.OPEN_QUESTION,
+                    facts=(what,),
+                    instruction="写成一句可以直接回答的话。",
+                    max_chars=40,
+                )
+            except ComposerUnavailable:
+                # 说不出话就不说。群聊照常，人自己聊。
+                continue
+            asked.append(
+                Topic(
+                    text=draft.text,
+                    about_item_id=item_id,
+                    grounded_in=draft.grounded_in,
+                )
+            )
+        return tuple(asked)
 
     def put_on_canvas(
         self, token: Capability, suggestion: Suggestion, *, now: datetime

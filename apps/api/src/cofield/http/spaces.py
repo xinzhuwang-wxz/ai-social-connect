@@ -29,6 +29,8 @@ from pydantic import AwareDatetime, BaseModel, Field
 from sqlalchemy import Connection
 
 from cofield.adapters.llm import Cassette, LiteLLMComposer
+from cofield.adapters.persistence.messages import Kind as MessageKind
+from cofield.adapters.persistence.messages import Message, MessageRepository
 from cofield.adapters.persistence.repositories import Repositories
 from cofield.adapters.persistence.spaces import Item, Space, SpaceRepository
 from cofield.domain.ports.composer import Composer, DraftKind
@@ -636,3 +638,148 @@ def accept_suggestion(
     except CanvasRefused as exc:
         raise _refused(exc) from exc
     return ItemOut.of(item, label=_label(board, item))
+
+
+# --- 群聊（N+1）-------------------------------------------------------------
+
+
+class MessageOut(BaseModel):
+    id: UUID
+    author_id: UUID
+    #: 是不是助手说的。**一眼可辨**——界面靠它把助手的话和人的话分开，
+    #: 分不清谁说的，"AI 起草、人类决定"就只是一句话。
+    is_agent: bool
+    kind: str
+    text: str
+    created_at: datetime
+    replies_to: UUID | None = None
+    #: 这张话题卡关于哪件还没定的事。
+    about_item_id: UUID | None = None
+
+
+class ThreadOut(BaseModel):
+    topic: MessageOut
+    replies: list[MessageOut]
+    #: 有没有人回过。**没人回不是失败，是信号**——它说明这张卡问得不对，
+    #: 或者这件事大家其实不在意。
+    answered: bool
+
+
+class ChatOut(BaseModel):
+    """整条聊天记录 + 话题卡。
+
+    **不分页。**「大家能看到整体的聊天记录」是这一层的承诺；一个默认只给
+    最近五十条的接口，会让"看看当时怎么说的"变成一件做不到的事。
+    """
+
+    messages: list[MessageOut]
+    threads: list[ThreadOut]
+
+
+class SayRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    #: 回在哪张话题卡下面。空 = 说在主线上。
+    replies_to: UUID | None = None
+
+
+def _message_out(message: Message) -> MessageOut:
+    return MessageOut(
+        id=message.id,
+        author_id=message.author_id,
+        is_agent=message.is_agent,
+        kind=message.kind.value,
+        text=message.text,
+        created_at=message.created_at,
+        replies_to=message.replies_to,
+        about_item_id=message.about_item_id,
+    )
+
+
+@router.get("/spaces/{space_id}/chat", response_model=ChatOut)
+def read_chat(board: BoardDep) -> ChatOut:
+    """说过的话，全部。"""
+    repo = MessageRepository(board.conn, board.campus)
+    return ChatOut(
+        messages=[_message_out(m) for m in repo.history(board.space.id)],
+        threads=[
+            ThreadOut(
+                topic=_message_out(t.topic),
+                replies=[_message_out(r) for r in t.replies],
+                answered=t.answered,
+            )
+            for t in repo.threads(board.space.id)
+        ],
+    )
+
+
+@router.post("/spaces/{space_id}/chat", response_model=MessageOut, status_code=201)
+def say(board: BoardDep, payload: SayRequest, clock: ClockDep) -> MessageOut:
+    """说一句话。
+
+    **作者来自请求头，不来自请求体**——否则任何人都能以任何人的名义发言，
+    而聊天记录是这个组以后唯一能回去查的东西。
+    """
+    repo = MessageRepository(board.conn, board.campus)
+    try:
+        message = repo.say(
+            board.space.id,
+            author_id=board.me,
+            text=payload.text,
+            now=clock.now(),
+            replies_to=payload.replies_to,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from None
+    return _message_out(message)
+
+
+@router.post("/spaces/{space_id}/chat:topics", response_model=list[MessageOut])
+def raise_topics(
+    board: BoardDep, composer: ComposerDep, clock: ClockDep
+) -> list[MessageOut]:
+    """让助手把还没定的事，变成几句可以回答的话。
+
+    **它挑不了话题，只能把已经存在的待定事项写得好回答一点。** 输入是
+    开着的决策门和成局证明里留给真人的那几条；凭空造话题的助手会很快
+    被所有人忽略，而一旦被忽略，之后它说什么都没人看了。
+
+    助手关着时返回空数组 + 200：关掉助手是正常状态不是故障。
+    同一件事不问第二遍——问第二遍说明它没在听。
+    """
+    now = clock.now()
+    if not board.space.agent_enabled:
+        return []
+
+    agent = _agent(board, composer)
+    repo = MessageRepository(board.conn, board.campus)
+    view = board.canvas.view(now=now)
+    unsettled = [(card.item.id, card.item.title) for card in view.open_gates]
+
+    try:
+        token = agent.issue(
+            purpose=DraftKind.OPEN_QUESTION,
+            powers=frozenset({Power.ASK}),
+            now=now,
+        )
+        topics = agent.open_questions(
+            token,
+            unsettled=unsettled,
+            already_asked=repo.already_asked_about(board.space.id),
+            now=now,
+        )
+    except CanvasRefused:
+        return []
+
+    said = [
+        repo.say(
+            board.space.id,
+            author_id=field_agent(board.space.id).id,
+            text=topic.text,
+            now=now,
+            kind=MessageKind.TOPIC,
+            is_agent=True,
+            about_item_id=topic.about_item_id,
+        )
+        for topic in topics
+    ]
+    return [_message_out(m) for m in said]
