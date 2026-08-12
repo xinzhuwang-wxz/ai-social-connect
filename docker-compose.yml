@@ -47,6 +47,12 @@ services:
     environment:
       # 浏览器里跑的代码要连宿主暴露的端口，不是 compose 网络里的服务名。
       NEXT_PUBLIC_API_BASE: http://localhost:8000
+      # 服务端代理（`app/api/[...path]/route.ts`）跑在容器里，走 compose 网络。
+      #
+      # **缺了它整个前端一片错误态**：代理会去连 localhost:8000，而那是
+      # web 容器自己的 8000，没人在听。而且是运行时注入不是构建期——
+      # 构建那一刻这个值还不存在，写进镜像的会是错的那一个。
+      API_ORIGIN: http://api:8000
     depends_on: [api]
     ports: ["3000:3000"]
 
