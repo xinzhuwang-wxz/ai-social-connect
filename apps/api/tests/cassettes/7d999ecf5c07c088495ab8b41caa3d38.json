@@ -1,0 +1,13 @@
+{
+  "kind": "open_question",
+  "model": "volcengine/doubao-seed-1-6-flash-250828",
+  "instruction": "写成一句可以直接回答的话。",
+  "facts": [
+    "署名怎么写"
+  ],
+  "max_chars": 40,
+  "text": "这次项目的署名怎么写？",
+  "grounded_in": [
+    "署名怎么写"
+  ]
+}
